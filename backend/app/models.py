@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, Boolean, Text, LargeBinary, func
+from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, Text, LargeBinary, func
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -29,6 +29,8 @@ class JigTool(Base):
     jig_tool_name = Column(String(150), nullable=False)
     item_type = Column(String(10), nullable=False, default="Jig")  # "Jig" or "Tool"
     department = Column(String(50), nullable=False)
+    process = Column(String(50))    # e.g. "TEST 1_J97X", "TEST 1_Uflex"
+    machine = Column(String(50))    # e.g. "UTS", "Summit"
     default_location = Column(String(50), nullable=False)
     default_qty = Column(Integer, nullable=False, default=0)
     image_data = Column(LargeBinary)
@@ -43,15 +45,12 @@ class JigToolLot(Base):
     __tablename__ = "jig_tool_lots"
 
     lot_id = Column(Integer, primary_key=True, index=True)
-    lot_number = Column(String(20), unique=True, nullable=False)
+    lot_number = Column(String(50), unique=True, nullable=False)
     jig_tool_id = Column(Integer, ForeignKey("jigtools.jig_tools.jig_tool_id"), nullable=False)
     department = Column(String(50), nullable=False)
     rack_location = Column(String(50), nullable=False)
     initial_qty = Column(Integer, nullable=False)
     current_qty = Column(Integer, nullable=False)
-    replenish_limit = Column(Integer, nullable=False, default=5)
-    total_damaged = Column(Integer, nullable=False, default=0)
-    total_missing = Column(Integer, nullable=False, default=0)
     created_at = Column(TIMESTAMP, server_default=func.now())
 
     jig_tool = relationship("JigTool", back_populates="lots")
@@ -83,16 +82,8 @@ class ReturnRecord(Base):
     return_id = Column(Integer, primary_key=True, index=True)
     borrow_id = Column(Integer, ForeignKey("jigtools.borrow_records.borrow_id"), nullable=False)
     return_qty = Column(Integer, nullable=False)
-    good_qty = Column(Integer, nullable=False, default=0)
-    damaged_qty = Column(Integer, nullable=False, default=0)
-    missing_qty = Column(Integer, nullable=False, default=0)
     returning_technician_id = Column(String(20), ForeignKey("jigtools.technicians.technician_id"))
     return_datetime = Column(TIMESTAMP, server_default=func.now())
-    resolved = Column(Boolean, default=False)
-    resolved_at = Column(TIMESTAMP)
-    resolved_good_qty = Column(Integer, default=0)
-    resolved_damaged_qty = Column(Integer, default=0)
-    resolved_by = Column(String(50))
 
     borrow = relationship("BorrowRecord", back_populates="return_record")
 

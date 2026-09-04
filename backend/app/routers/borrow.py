@@ -172,25 +172,13 @@ def submit_return(borrow_id: int, payload: schemas.ReturnCreate, db: Session = D
         if not returning_tech:
             raise HTTPException(status_code=404, detail="Returning WBI not found.")
 
-        total_return = payload.good_qty + payload.damaged_qty + payload.missing_qty
-        if total_return != record.requested_qty:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Good+Damaged+Missing = {total_return}, must equal borrowed qty ({record.requested_qty})."
-            )
-
         lot = record.lot
         qty_before = lot.current_qty
-        lot.current_qty += payload.good_qty
-        lot.total_damaged += payload.damaged_qty
-        lot.total_missing += payload.missing_qty
+        lot.current_qty += record.requested_qty
 
         return_record = models.ReturnRecord(
             borrow_id=record.borrow_id,
-            return_qty=total_return,
-            good_qty=payload.good_qty,
-            damaged_qty=payload.damaged_qty,
-            missing_qty=payload.missing_qty,
+            return_qty=record.requested_qty,
             returning_technician_id=payload.returning_technician_id,
         )
         db.add(return_record)
@@ -199,13 +187,13 @@ def submit_return(borrow_id: int, payload: schemas.ReturnCreate, db: Session = D
         history = models.JigLotHistory(
             lot_id=lot.lot_id,
             action_type="IN",
-            qty_change=payload.good_qty,
+            qty_change=record.requested_qty,
             qty_before=qty_before,
             qty_after=lot.current_qty,
             reason=f"Return for {record.request_number}",
             technician_id=payload.returning_technician_id,
             borrow_id=record.borrow_id,
-            notes=f"Good: {payload.good_qty} | Damaged: {payload.damaged_qty} | Missing: {payload.missing_qty}",
+            notes=f"Returned {record.requested_qty} unit(s)",
         )
         db.add(history)
         db.commit()

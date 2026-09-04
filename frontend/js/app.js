@@ -4,11 +4,9 @@
 
 let allRequests = [];
 let allLots = [];
-let allMissing = [];
 let currentReturnRecord = null;
 let currentApproveRecord = null;
 let currentUpdateLot = null;
-let currentResolveMissing = null;
 let currentLotHistory = null;
 
 function imageUrl(jigToolId, hasImage) {
@@ -87,17 +85,9 @@ async function loadAllLots() {
   } catch (err) { console.error("loadAllLots:", err); }
 }
 
-async function loadMissingUnits() {
-  try {
-    allMissing = await apiGet("/api/dashboard/missing");
-    renderMissingList();
-  } catch (err) { console.error("loadMissing:", err); }
-}
-
 function refreshAll() {
   loadAllRequests();
   loadAllLots();
-  loadMissingUnits();
 }
 
 // =====================================================
@@ -126,10 +116,9 @@ function statusBadge(status) {
 function actionBadge(type) {
   const map = {
     OUT: "action-out", IN: "action-in",
-    QTY_UPDATE: "action-update", REPLENISHMENT: "action-update",
+    QTY_UPDATE: "action-update",
     LOCATION_CHANGE: "action-update", REGISTERED: "action-reg",
     LOT_NUMBER_CHANGE: "action-update",
-    MISSING_RESOLVED: "action-missing",
   };
   return `<span class="${map[type] || 'action-reg'}">${type}</span>`;
 }
@@ -212,41 +201,6 @@ document.getElementById("search-box").addEventListener("input", renderBorrowedLi
 document.getElementById("dept-filter").addEventListener("change", renderBorrowedList);
 
 // =====================================================
-// MISSING UNIT LIST
-// =====================================================
-function renderMissingList() {
-  const tbody = document.getElementById("missing-tbody");
-  const empty = document.getElementById("missing-empty");
-  const header = document.getElementById("missing-action-header");
-  if (header) header.textContent = isAdmin() ? "Action" : "";
-
-  tbody.innerHTML = "";
-  if (allMissing.length === 0) { empty.style.display = "block"; return; }
-  empty.style.display = "none";
-
-  for (const m of allMissing) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${m.jig_tool_name}</td>
-      <td><span class="lot-tag">${m.lot_number}</span></td>
-      <td>${m.technician_name}</td>
-      <td style="color:var(--danger); font-weight:600;">${m.missing_qty}</td>
-      <td>${formatDateTime(m.return_datetime)}</td>
-      <td>${m.duration}</td>
-      <td>${isAdmin() ? `<button class="btn-update-missing" data-id="${m.return_id}">Update</button>` : ""}</td>
-    `;
-    tbody.appendChild(tr);
-  }
-
-  tbody.querySelectorAll(".btn-update-missing[data-id]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const m = allMissing.find(x => x.return_id === Number(btn.dataset.id));
-      if (m) openResolveMissing(m);
-    });
-  });
-}
-
-// =====================================================
 // QUEUED LIST
 // =====================================================
 function renderQueuedList() {
@@ -297,7 +251,6 @@ document.getElementById("btn-admin-login").addEventListener("click", () => {
   if (isAdmin()) {
     clearAdmin();
     renderBorrowedList();
-    renderMissingList();
     renderQueuedList();
     document.querySelector('.sidebar-item[data-panel="main"]').click();
   } else {
@@ -318,7 +271,6 @@ document.getElementById("btn-do-login").addEventListener("click", async () => {
     document.getElementById("login-username").value = "";
     document.getElementById("login-password").value = "";
     renderBorrowedList();
-    renderMissingList();
     renderQueuedList();
   } catch (err) {
     showMsg(msg, err.message, "error");
@@ -423,14 +375,10 @@ function openReturnPopup(record) {
   document.getElementById("return-title").textContent = `Return: ${record.jig_tool_name} — ${record.lot_number}`;
   document.getElementById("return-subtitle").textContent = `${record.request_number} · ${record.handler_no}`;
   document.getElementById("return-borrower-info").innerHTML =
-    `<strong>Borrowed by:</strong> ${record.technician_name} &nbsp;·&nbsp; <strong>Qty borrowed:</strong> ${record.requested_qty} unit(s)`;
+    `<strong>Borrowed by:</strong> ${record.technician_name} &nbsp;·&nbsp; <strong>Qty to return:</strong> ${record.requested_qty} unit(s)`;
   document.getElementById("ret-tech-id").value = "";
   document.getElementById("ret-tech-name").value = "";
-  document.getElementById("ret-good").value = record.requested_qty;
-  document.getElementById("ret-damaged").value = 0;
-  document.getElementById("ret-missing").value = 0;
   hideMsg(document.getElementById("return-msg"));
-  updateReturnTotals();
   openPopup("modal-return");
 }
 
@@ -445,42 +393,14 @@ document.getElementById("ret-tech-id").addEventListener("blur", async () => {
   } catch { nameEl.value = "WBI not found"; }
 });
 
-["ret-good", "ret-damaged", "ret-missing"].forEach(id => {
-  document.getElementById(id).addEventListener("input", updateReturnTotals);
-});
-
-function updateReturnTotals() {
-  if (!currentReturnRecord) return;
-  const borrowed = currentReturnRecord.requested_qty;
-  const sum = ["ret-good", "ret-damaged", "ret-missing"]
-    .reduce((s, id) => s + (Number(document.getElementById(id).value) || 0), 0);
-  const el = document.getElementById("return-totals");
-  if (sum === borrowed) {
-    el.className = "totals-check";
-    el.textContent = `Good + Damaged + Missing = ${sum} — matches borrowed qty ✓`;
-  } else {
-    el.className = "totals-check mismatch";
-    el.textContent = `Total = ${sum}, but borrowed qty = ${borrowed}. Must be equal.`;
-  }
-}
-
 document.getElementById("btn-confirm-return").addEventListener("click", async () => {
   const msg = document.getElementById("return-msg");
   hideMsg(msg);
   if (!currentReturnRecord) return;
-  const good    = Number(document.getElementById("ret-good").value)    || 0;
-  const damaged = Number(document.getElementById("ret-damaged").value) || 0;
-  const missing = Number(document.getElementById("ret-missing").value) || 0;
   const retTechId = document.getElementById("ret-tech-id").value.trim().toLowerCase();
   if (!retTechId) { showMsg(msg, "Please enter the returning WBI.", "error"); return; }
-  const total = good + damaged + missing;
-  if (total !== currentReturnRecord.requested_qty) {
-    showMsg(msg, `Breakdown total (${total}) must equal borrowed qty (${currentReturnRecord.requested_qty}).`, "error");
-    return;
-  }
   try {
     await apiPost(`/api/request/${currentReturnRecord.borrow_id}/return`, {
-      good_qty: good, damaged_qty: damaged, missing_qty: missing,
       returning_technician_id: retTechId,
     });
     showMsg(msg, "Return recorded successfully.", "success");
@@ -639,14 +559,12 @@ async function viewLotHistory(lotId, lotNumber) {
     const history = await apiGet(`/api/lots/${lotId}/history`);
     const lot = allLots.find(l => l.lot_id === lotId);
     currentLotHistory = { lotId, lotNumber, history, lot };
-    const totalDefect = lot ? (lot.total_damaged + lot.total_missing) : 0;
     const outNow = allRequests
       .filter(r => r.lot_id === lotId && (getDisplayStatus(r) === "active" || getDisplayStatus(r) === "overdue"))
       .reduce((s, r) => s + r.requested_qty, 0);
     document.getElementById("lh-summary-boxes").innerHTML = `
       <div class="lot-sum-box"><div class="lot-sum-val">${lot ? lot.current_qty : "—"}</div><div class="lot-sum-label">Current Qty</div></div>
       <div class="lot-sum-box warn"><div class="lot-sum-val">${outNow}</div><div class="lot-sum-label">Out Now</div></div>
-      <div class="lot-sum-box danger"><div class="lot-sum-val">${totalDefect}</div><div class="lot-sum-label">Damaged &amp; Loss</div></div>
       <div class="lot-sum-box"><div class="lot-sum-val">${lot ? lot.rack_location : "—"}</div><div class="lot-sum-label">Rack Location</div></div>
     `;
     document.getElementById("lh-detail-title").textContent = `${lotNumber} — Transaction Log`;
@@ -696,7 +614,7 @@ document.getElementById("btn-export-excel").addEventListener("click", () => {
 // =====================================================
 async function loadUpdatePackages() {
   try {
-    const data = await apiGet("/api/dashboard/replenishment");
+    const data = await apiGet("/api/lots");
     renderUpdateTable(data.filter(r => r.department === "Test 2"), "pkg-t2-tbody", "pkg-t2-empty");
     renderUpdateTable(data.filter(r => r.department === "Test 1"), "pkg-t1-tbody", "pkg-t1-empty");
   } catch (err) { console.error(err); }
@@ -709,9 +627,6 @@ function renderUpdateTable(rows, tbodyId, emptyId) {
   empty.style.display = "none";
   tbody.innerHTML = "";
   for (const r of rows) {
-    const badge = r.status === "REPLENISH"
-      ? `<span class="badge badge-overdue">Replenish</span>`
-      : `<span class="badge badge-active">OK</span>`;
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${thumbHtml(r)}</td>
@@ -719,10 +634,6 @@ function renderUpdateTable(rows, tbodyId, emptyId) {
       <td>${r.jig_tool_name}</td>
       <td>${r.rack_location}</td>
       <td>${r.current_qty}</td>
-      <td>${r.total_damaged}</td>
-      <td>${r.total_missing}</td>
-      <td>${r.replenish_limit}</td>
-      <td>${badge}</td>
       <td>
         <button class="btn-edit-row" data-lotid="${r.lot_id}">Edit</button>
         <button class="btn-delete-row" data-lotid="${r.lot_id}" data-lotno="${r.lot_number}">Delete</button>
@@ -786,39 +697,6 @@ async function deleteLot(lotId, lotNumber) {
 }
 
 // =====================================================
-// RESOLVE MISSING UNIT
-// =====================================================
-function openResolveMissing(m) {
-  currentResolveMissing = m;
-  document.getElementById("rm-subtitle").textContent = `${m.jig_tool_name} — ${m.lot_number}`;
-  document.getElementById("rm-info").innerHTML =
-    `<strong>Technician:</strong> ${m.technician_name} &nbsp;·&nbsp; <strong>Missing:</strong> ${m.missing_qty} unit(s)`;
-  document.getElementById("rm-good").value = 0;
-  document.getElementById("rm-damaged").value = 0;
-  hideMsg(document.getElementById("rm-msg"));
-  openPopup("modal-resolve-missing");
-}
-
-document.getElementById("btn-confirm-resolve").addEventListener("click", async () => {
-  if (!currentResolveMissing || !isAdmin()) return;
-  const msg = document.getElementById("rm-msg");
-  hideMsg(msg);
-  const good = Number(document.getElementById("rm-good").value) || 0;
-  const damaged = Number(document.getElementById("rm-damaged").value) || 0;
-  if (good + damaged > currentResolveMissing.missing_qty) {
-    showMsg(msg, `Total (${good+damaged}) cannot exceed missing qty (${currentResolveMissing.missing_qty}).`, "error");
-    return;
-  }
-  try {
-    await apiPost(`/api/dashboard/missing/${currentResolveMissing.return_id}/resolve`, {
-      good_qty_recovered: good, damaged_qty: damaged, admin_username: adminSession.username,
-    });
-    showMsg(msg, "Missing jig/tool case resolved.", "success");
-    setTimeout(() => { closePopup("modal-resolve-missing"); refreshAll(); }, 1000);
-  } catch (err) { showMsg(msg, err.message, "error"); }
-});
-
-// =====================================================
 // REGISTER PANEL
 // =====================================================
 let packagesCache = [];
@@ -870,6 +748,8 @@ document.getElementById("package-form").addEventListener("submit", async (e) => 
     formData.append("jig_tool_name", document.getElementById("pkg-name").value.trim());
     formData.append("item_type", document.getElementById("pkg-type").value);
     formData.append("department", document.getElementById("pkg-dept").value);
+    formData.append("process", document.getElementById("pkg-process").value);
+    formData.append("machine", document.getElementById("pkg-machine").value);
     formData.append("default_location", document.getElementById("pkg-location").value.trim());
     formData.append("default_qty", Number(document.getElementById("pkg-qty").value));
     const file = document.getElementById("pkg-image").files[0];
@@ -891,14 +771,12 @@ document.getElementById("lot-form").addEventListener("submit", async (e) => {
     lot_number: document.getElementById("lot-number").value.trim(),
     rack_location: document.getElementById("lot-location").value.trim(),
     initial_qty: Number(document.getElementById("lot-qty").value),
-    replenish_limit: Number(document.getElementById("lot-limit").value) || 5,
   };
   if (!payload.jig_tool_id) { showMsg(msg, "Please select a jig / tool.", "error"); return; }
   try {
     const lot = await apiPost("/api/lots", payload);
     showMsg(msg, `Lot ${lot.lot_number} registered.`, "success");
     e.target.reset();
-    document.getElementById("lot-limit").value = 5;
     loadAllLots();
     loadPackagesForRegister();
   } catch (err) { showMsg(msg, err.message, "error"); }

@@ -19,9 +19,6 @@ def _lot_to_out(lot: models.JigToolLot) -> schemas.LotOut:
         rack_location=lot.rack_location,
         initial_qty=lot.initial_qty,
         current_qty=lot.current_qty,
-        replenish_limit=lot.replenish_limit,
-        total_damaged=lot.total_damaged,
-        total_missing=lot.total_missing,
         has_image=bool(lot.jig_tool.image_data),
     )
 
@@ -54,7 +51,6 @@ def register_lot(payload: schemas.LotCreate, db: Session = Depends(get_db)):
             rack_location=payload.rack_location,
             initial_qty=payload.initial_qty,
             current_qty=payload.initial_qty,
-            replenish_limit=payload.replenish_limit,
         )
         db.add(lot)
         db.commit()
@@ -117,22 +113,14 @@ def update_lot(lot_id: int, payload: schemas.LotUpdate, db: Session = Depends(ge
         if payload.rack_location is not None:
             lot.rack_location = payload.rack_location
 
-        defect_reset_note = ""
-        if payload.reason == "Replenishment":
-            lot.total_damaged = 0
-            lot.total_missing = 0
-            defect_reset_note = " | Defect counters reset (Replenishment)"
-
         action = "QTY_UPDATE" if payload.new_qty is not None else "LOCATION_CHANGE"
-        if payload.reason == "Replenishment":
-            action = "REPLENISHMENT"
         if lot_number_before != lot.lot_number:
             action = "LOT_NUMBER_CHANGE" if action == "LOCATION_CHANGE" else action
 
         notes_parts = [f"Updated by {admin.full_name}"]
         if lot_number_before != lot.lot_number:
             notes_parts.append(f"Lot No: {lot_number_before} → {lot.lot_number}")
-        notes_parts_str = " | ".join(notes_parts) + defect_reset_note
+        notes_parts_str = " | ".join(notes_parts)
 
         history = models.JigLotHistory(
             lot_id=lot.lot_id,

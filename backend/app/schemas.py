@@ -21,6 +21,8 @@ class JigToolOut(BaseModel):
     jig_tool_name: str
     item_type: str
     department: str
+    process: Optional[str] = None
+    machine: Optional[str] = None
     default_location: str
     default_qty: int
     has_image: bool = False
@@ -33,7 +35,6 @@ class LotCreate(BaseModel):
     jig_tool_id: int
     rack_location: str
     initial_qty: int = Field(gt=0)
-    replenish_limit: int = Field(default=5, gt=0)
 
 class LotOut(BaseModel):
     lot_id: int
@@ -45,9 +46,6 @@ class LotOut(BaseModel):
     rack_location: str
     initial_qty: int
     current_qty: int
-    replenish_limit: int
-    total_damaged: int = 0
-    total_missing: int = 0
     has_image: bool = False
     class Config:
         from_attributes = True
@@ -88,42 +86,16 @@ class RequestOut(BaseModel):
 
 
 class ReturnCreate(BaseModel):
-    good_qty: int = Field(ge=0, default=0)
-    damaged_qty: int = Field(ge=0, default=0)
-    missing_qty: int = Field(ge=0, default=0)
     returning_technician_id: str
 
 class ReturnOut(BaseModel):
     return_id: int
     borrow_id: int
     return_qty: int
-    good_qty: int
-    damaged_qty: int
-    missing_qty: int
     returning_technician_id: str
     return_datetime: datetime
     class Config:
         from_attributes = True
-
-
-class MissingUnitOut(BaseModel):
-    return_id: int
-    borrow_id: int
-    lot_id: int
-    lot_number: str
-    jig_tool_name: str
-    technician_name: str
-    missing_qty: int
-    return_datetime: datetime
-    duration: str
-    resolved: bool = False
-    class Config:
-        from_attributes = True
-
-class MissingUnitResolve(BaseModel):
-    good_qty_recovered: int = Field(ge=0, default=0)
-    damaged_qty: int = Field(ge=0, default=0)
-    admin_username: str
 
 
 class LotHistoryOut(BaseModel):
@@ -144,35 +116,6 @@ class LotHistoryOut(BaseModel):
     created_at: datetime
     class Config:
         from_attributes = True
-
-
-class ReplenishmentItem(BaseModel):
-    lot_id: int
-    lot_number: str
-    jig_tool_name: str
-    item_type: str
-    department: str
-    rack_location: str
-    current_qty: int
-    total_damaged: int
-    total_missing: int
-    total_defect: int
-    replenish_limit: int
-    status: str
-
-class RequestedItem(BaseModel):
-    borrow_id: int
-    request_number: str
-    lot_number: str
-    jig_tool_name: str
-    rack_location: str
-    technician_id: str
-    technician_name: str
-    requested_qty: int
-    purpose: str
-    handler_no: str
-    borrow_datetime: datetime
-    duration: str
 
 
 class AdminLogin(BaseModel):
