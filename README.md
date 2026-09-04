@@ -32,21 +32,24 @@ System — but all tables live in their own Postgres **schema** (`jigtools`), so
 nothing collides with the dummy-unit app's tables in `public`. The schema and
 tables are created automatically on first startup.
 
-```
-postgresql://traceability_user:TraceDB2024@92.120.147.79:5432/dummy_traceability
-```
+**Setup:** copy `.env.example` to `.env` and fill in the real connection
+string. `.env` is gitignored — never commit it. The backend loads it
+automatically (via `python-dotenv`); docker-compose reads it too (`env_file`).
 
-Edit `backend\app\database.py` (or set the `DATABASE_URL` / `DB_SCHEMA` env vars)
-if your DB details change.
+```bash
+cp .env.example .env
+# then edit .env with the real DATABASE_URL / DB_SCHEMA
+```
 
 This app has its own `technicians` and `admins` tables (in the `jigtools`
 schema) — separate from the dummy-unit app's. Register technicians from the
 **Register** panel once logged in as admin. Since there's no admin yet on a
-fresh schema, insert the first admin directly, e.g.:
+fresh schema, insert the first admin directly (pick your own username/password
+— don't reuse the dummy-unit app's), e.g.:
 
 ```sql
 INSERT INTO jigtools.admins (username, full_name, password)
-VALUES ('farzanaJ', 'Farzana Jaafar', 'Dmyt2@Master');
+VALUES ('yourusername', 'Your Full Name', 'YourChosenPassword');
 ```
 
 ### Why the jig/tool picture is stored in the database, not on disk
@@ -74,8 +77,8 @@ that defect type was specific to dummy IC units).
 
 ## Admin login
 
-No admin is seeded automatically — insert one manually as shown above, or ask
-whoever manages the dummy-unit app's DB to add one the same way they did there.
+No admin is seeded automatically — insert one manually as shown above with
+your own credentials.
 
 ---
 

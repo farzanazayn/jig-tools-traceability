@@ -1,0 +1,26 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+      network: host
+      args:
+        HTTP_PROXY: http://127.0.0.1:3128
+        HTTPS_PROXY: http://127.0.0.1:3128
+        http_proxy: http://127.0.0.1:3128
+        https_proxy: http://127.0.0.1:3128
+    expose:
+      - "8101"
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "8089:89"
+    depends_on:
+      - api
+    restart: unless-stopped

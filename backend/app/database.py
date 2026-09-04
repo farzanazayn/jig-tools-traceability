@@ -1,14 +1,21 @@
 import os
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.schema import MetaData
 
-# Same Postgres server/credentials as the Dummy Unit Traceability System,
-# but a dedicated schema so tables never collide with that app's tables.
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://traceability_user:TraceDB2024@92.120.147.79:5432/dummy_traceability"
-)
+# Loads DATABASE_URL / DB_SCHEMA from a local .env file (gitignored — never
+# committed). See .env.example for the format. Same Postgres server/credentials
+# as the Dummy Unit Traceability System, but a dedicated schema so tables never
+# collide with that app's tables.
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is not set. Copy .env.example to .env and fill in the "
+        "real connection string (do not commit .env)."
+    )
 
 DB_SCHEMA = os.getenv("DB_SCHEMA", "jigtools")
 
