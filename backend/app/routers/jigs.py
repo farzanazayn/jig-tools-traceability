@@ -2,7 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Optional
+import io
+import re
+import csv
+import mimetypes
 import traceback
+import openpyxl
 from .. import models, schemas
 from ..database import get_db
 
@@ -10,6 +15,7 @@ router = APIRouter(prefix="/api/jigs", tags=["jigs"])
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 def _to_out(j: models.JigTool) -> schemas.JigToolOut:
@@ -79,6 +85,198 @@ async def create_jig(
         db.rollback()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _normalize(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+
+
+def _parse_qty(raw) -> Optional[int]:
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        return int(raw)
+    match = re.search(r"\d+", str(raw))
+    return int(match.group()) if match else None
+
+
+_HEADER_ALIASES = {
+    "description": "description",
+    "binlocation": "rack_location",
+    "stockinhand": "qty",
+    "parttype": "item_type",
+    "process": "process",
+    "machine": "machine",
+    "oempartnumber": "code",
+    "department": "department",
+}
+
+
+def _read_rows(filename: str, data: bytes):
+    """Yields dicts of normalized-field -> raw value, from an .xlsx or .csv file."""
+    lower = filename.lower()
+    if lower.endswith(".csv"):
+        text = data.decode("utf-8-sig")
+        reader = csv.reader(io.StringIO(text))
+        rows = list(reader)
+    elif lower.endswith(".xlsx") or lower.endswith(".xlsm"):
+        wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
+        ws = wb.worksheets[0]
+        rows = [list(r) for r in ws.iter_rows(values_only=True)]
+    else:
+        raise HTTPException(status_code=400, detail="Spreadsheet must be .xlsx or .csv")
+
+    if not rows:
+        return
+
+    header_row = rows[0]
+    field_by_col = {}
+    for idx, header in enumerate(header_row):
+        key = _normalize(str(header)) if header else ""
+        if key in _HEADER_ALIASES:
+            field_by_col[idx] = _HEADER_ALIASES[key]
+
+    if "description" not in field_by_col.values():
+        raise HTTPException(status_code=400, detail="Could not find a 'Description' column in the spreadsheet.")
+
+    for row in rows[1:]:
+        record = {}
+        for idx, field in field_by_col.items():
+            record[field] = row[idx] if idx < len(row) else None
+        if record.get("description"):
+            yield record
+
+
+@router.post("/bulk-import")
+async def bulk_import_jigs(
+    department: str = Form(...),
+    admin_username: str = Form(...),
+    file: UploadFile = File(...),
+    images: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+):
+    admin = db.query(models.Admin).filter(models.Admin.username == admin_username).first()
+    if not admin:
+        raise HTTPException(status_code=401, detail="Invalid admin session.")
+
+    sheet_bytes = await file.read()
+    try:
+        records = list(_read_rows(file.filename, sheet_bytes))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read spreadsheet: {e}")
+
+    # Preload uploaded pictures, keyed by normalized filename stem
+    image_by_key = {}
+    for img in images:
+        if not img.filename:
+            continue
+        ext = "." + img.filename.rsplit(".", 1)[-1].lower() if "." in img.filename else ""
+        if ext not in ALLOWED_IMAGE_EXTS:
+            continue
+        stem = img.filename.rsplit(".", 1)[0]
+        data = await img.read()
+        if len(data) > MAX_IMAGE_BYTES:
+            continue
+        mime = mimetypes.guess_type(img.filename)[0] or "image/jpeg"
+        image_by_key[_normalize(stem)] = (data, mime)
+
+    created = []
+    skipped = []
+    errors = []
+
+    for record in records:
+        name = str(record.get("description") or "").strip()
+        if not name:
+            continue
+        try:
+            qty = _parse_qty(record.get("qty"))
+            if qty is None:
+                errors.append(f"{name}: could not read a quantity from '{record.get('qty')}'")
+                continue
+
+            item_type = str(record.get("item_type") or "Jig").strip()
+            if item_type not in ("Jig", "Tool"):
+                item_type = "Jig"
+
+            row_department = str(record.get("department") or "").strip() or department
+            process = (str(record.get("process")).strip() if record.get("process") else None) or None
+            machine = (str(record.get("machine")).strip() if record.get("machine") else None) or None
+            rack_location = str(record.get("rack_location") or "").strip()
+            code = str(record.get("code") or "").strip()
+
+            existing_jig = db.query(models.JigTool).filter(
+                models.JigTool.jig_tool_name == name,
+                models.JigTool.department == row_department,
+            ).first()
+            if existing_jig:
+                skipped.append(f"{name}: a jig/tool with this name already exists in {row_department}")
+                continue
+
+            lot_number = code if code else _normalize(name)[:45].upper() or f"IMPORT-{len(created)+1}"
+            if db.query(models.JigToolLot).filter(models.JigToolLot.lot_number == lot_number).first():
+                skipped.append(f"{name}: lot number '{lot_number}' already exists")
+                continue
+
+            image_data = image_mime = None
+            match = image_by_key.get(_normalize(name))
+            if match:
+                image_data, image_mime = match
+
+            jig_tool = models.JigTool(
+                jig_tool_name=name,
+                item_type=item_type,
+                department=row_department,
+                process=process,
+                machine=machine,
+                default_location=rack_location,
+                default_qty=qty,
+                image_data=image_data,
+                image_mime=image_mime,
+            )
+            db.add(jig_tool)
+            db.flush()
+
+            lot = models.JigToolLot(
+                lot_number=lot_number,
+                jig_tool_id=jig_tool.jig_tool_id,
+                department=row_department,
+                rack_location=rack_location,
+                initial_qty=qty,
+                current_qty=qty,
+            )
+            db.add(lot)
+            db.flush()
+
+            history = models.JigLotHistory(
+                lot_id=lot.lot_id,
+                action_type="REGISTERED",
+                qty_before=0,
+                qty_after=qty,
+                qty_change=qty,
+                reason="Bulk import",
+                admin_username=admin_username,
+                notes=f"Imported from {file.filename}",
+            )
+            db.add(history)
+            db.commit()
+            created.append(name)
+
+        except Exception as e:
+            db.rollback()
+            errors.append(f"{name}: {e}")
+
+    return {
+        "created_count": len(created),
+        "skipped_count": len(skipped),
+        "error_count": len(errors),
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+        "pictures_matched": sum(1 for n in created if _normalize(n) in image_by_key),
+        "pictures_uploaded": len(image_by_key),
+    }
 
 
 @router.get("/{jig_tool_id}/image")

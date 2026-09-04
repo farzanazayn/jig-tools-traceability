@@ -286,34 +286,82 @@ document.getElementById("btn-open-request").addEventListener("click", async () =
   openPopup("modal-request");
 });
 
-document.getElementById("req-dept").addEventListener("change", () => {
-  const dept = document.getElementById("req-dept").value;
-  const sel = document.getElementById("req-lot");
-  sel.disabled = !dept;
-  sel.innerHTML = '<option value="">-- Select jig / tool --</option>';
-  document.getElementById("req-image-preview").style.display = "none";
-  if (!dept) return;
-  const filtered = allLots.filter(l => l.department === dept && l.current_qty > 0);
-  filtered.forEach(l => {
-    const opt = document.createElement("option");
-    opt.value = l.lot_id;
-    opt.textContent = `${l.jig_tool_name} - ${l.lot_number} (Avail: ${l.current_qty})`;
-    sel.appendChild(opt);
+function renderJigLotPicker(lots) {
+  const list = document.getElementById("req-lot-list");
+  if (lots.length === 0) {
+    list.innerHTML = `<div class="jig-picker-empty">No jigs/tools available in this department.</div>`;
+    return;
+  }
+  list.innerHTML = lots.map(l => {
+    const url = imageUrl(l.jig_tool_id, l.has_image);
+    const thumb = url
+      ? `<img class="jig-picker-row-thumb jig-thumb" src="${url}" alt="${l.jig_tool_name}" />`
+      : `<div class="jig-picker-row-thumb jig-thumb-placeholder">&#128736;&#65039;</div>`;
+    return `
+      <div class="jig-picker-row" data-lot-id="${l.lot_id}">
+        ${thumb}
+        <div class="jig-picker-row-text">
+          <div class="jig-picker-row-name">${l.jig_tool_name}</div>
+          <div class="jig-picker-row-meta">${l.lot_number} · Avail: ${l.current_qty}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+  list.querySelectorAll(".jig-picker-row[data-lot-id]").forEach(row => {
+    row.addEventListener("click", () => selectJigLot(Number(row.dataset.lotId)));
   });
+}
+
+document.getElementById("req-lot-toggle").addEventListener("click", () => {
+  const picker = document.getElementById("req-lot-picker");
+  if (document.getElementById("req-lot-toggle").disabled) return;
+  picker.classList.toggle("open");
 });
 
-document.getElementById("req-lot").addEventListener("change", () => {
-  const lot = allLots.find(l => l.lot_id === Number(document.getElementById("req-lot").value));
-  document.getElementById("req-location").value = lot ? lot.rack_location : "";
-  document.getElementById("req-available").value = lot ? lot.current_qty : "";
+document.addEventListener("click", (e) => {
+  const picker = document.getElementById("req-lot-picker");
+  if (picker && !picker.contains(e.target)) picker.classList.remove("open");
+});
+
+document.getElementById("req-dept").addEventListener("change", () => {
+  const dept = document.getElementById("req-dept").value;
+  const toggle = document.getElementById("req-lot-toggle");
+  const picker = document.getElementById("req-lot-picker");
+  document.getElementById("req-lot").value = "";
+  document.getElementById("req-image-preview").style.display = "none";
+  picker.classList.remove("open");
+  toggle.disabled = !dept;
+  toggle.querySelector(".jig-picker-toggle-thumb").outerHTML = `<span class="jig-picker-toggle-thumb jig-thumb-placeholder">&#128736;&#65039;</span>`;
+  toggle.querySelector(".jig-picker-toggle-label").textContent = dept ? "-- Select jig / tool --" : "-- Select department first --";
+  document.getElementById("req-location").value = "";
+  document.getElementById("req-available").value = "";
+  if (!dept) { renderJigLotPicker([]); return; }
+  const filtered = allLots.filter(l => l.department === dept && l.current_qty > 0);
+  renderJigLotPicker(filtered);
+});
+
+function selectJigLot(lotId) {
+  const lot = allLots.find(l => l.lot_id === lotId);
+  if (!lot) return;
+  document.getElementById("req-lot").value = lotId;
+  document.getElementById("req-lot-picker").classList.remove("open");
+
+  const toggle = document.getElementById("req-lot-toggle");
+  const url = imageUrl(lot.jig_tool_id, lot.has_image);
+  toggle.querySelector(".jig-picker-toggle-thumb").outerHTML = url
+    ? `<img class="jig-picker-toggle-thumb jig-thumb" src="${url}" alt="${lot.jig_tool_name}" />`
+    : `<span class="jig-picker-toggle-thumb jig-thumb-placeholder">&#128736;&#65039;</span>`;
+  toggle.querySelector(".jig-picker-toggle-label").textContent = `${lot.jig_tool_name} — ${lot.lot_number}`;
+
+  document.getElementById("req-location").value = lot.rack_location;
+  document.getElementById("req-available").value = lot.current_qty;
   const qtyInput = document.getElementById("req-qty");
   qtyInput.value = 1;
-  qtyInput.max = lot ? lot.current_qty : "";
+  qtyInput.max = lot.current_qty;
   const preview = document.getElementById("req-image-preview");
-  const url = lot ? imageUrl(lot.jig_tool_id, lot.has_image) : null;
   if (url) { preview.src = url; preview.style.display = "block"; }
   else { preview.style.display = "none"; }
-});
+}
 
 document.getElementById("req-tech-id").addEventListener("blur", async () => {
   const id = document.getElementById("req-tech-id").value.trim().toLowerCase();
@@ -353,9 +401,13 @@ document.getElementById("btn-submit-request").addEventListener("click", async ()
 
 function clearRequestForm() {
   document.getElementById("req-dept").value = "";
-  const sel = document.getElementById("req-lot");
-  sel.innerHTML = '<option value="">-- Select department first --</option>';
-  sel.disabled = true;
+  document.getElementById("req-lot").value = "";
+  const toggle = document.getElementById("req-lot-toggle");
+  toggle.disabled = true;
+  toggle.querySelector(".jig-picker-toggle-thumb").outerHTML = `<span class="jig-picker-toggle-thumb jig-thumb-placeholder">&#128736;&#65039;</span>`;
+  toggle.querySelector(".jig-picker-toggle-label").textContent = "-- Select department first --";
+  document.getElementById("req-lot-picker").classList.remove("open");
+  document.getElementById("req-lot-list").innerHTML = "";
   document.getElementById("req-tech-id").value = "";
   document.getElementById("req-tech-name").value = "";
   document.getElementById("req-location").value = "";
@@ -780,6 +832,55 @@ document.getElementById("lot-form").addEventListener("submit", async (e) => {
     loadAllLots();
     loadPackagesForRegister();
   } catch (err) { showMsg(msg, err.message, "error"); }
+});
+
+// =====================================================
+// BULK IMPORT (ADMIN)
+// =====================================================
+document.getElementById("bulk-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("bulk-msg");
+  hideMsg(msg);
+  document.getElementById("bulk-results").style.display = "none";
+
+  const dept = document.getElementById("bulk-dept").value;
+  const file = document.getElementById("bulk-file").files[0];
+  if (!dept) { showMsg(msg, "Please select a department.", "error"); return; }
+  if (!file) { showMsg(msg, "Please choose a spreadsheet file.", "error"); return; }
+
+  const formData = new FormData();
+  formData.append("department", dept);
+  formData.append("admin_username", adminSession.username);
+  formData.append("file", file);
+  const images = document.getElementById("bulk-images").files;
+  for (const img of images) formData.append("images", img);
+
+  showMsg(msg, "Importing — this can take a moment for large sheets...", "success");
+  try {
+    const result = await apiPostForm("/api/jigs/bulk-import", formData);
+    showMsg(msg, `Import finished: ${result.created_count} created, ${result.skipped_count} skipped, ${result.error_count} errors.`, "success");
+
+    const tbody = document.getElementById("bulk-summary-tbody");
+    tbody.innerHTML = `
+      <tr><td>Created</td><td>${result.created_count}</td></tr>
+      <tr><td>Skipped (already existed)</td><td>${result.skipped_count}</td></tr>
+      <tr><td>Errors</td><td>${result.error_count}</td></tr>
+      <tr><td>Pictures uploaded</td><td>${result.pictures_uploaded}</td></tr>
+      <tr><td>Pictures matched to a row</td><td>${result.pictures_matched}</td></tr>
+    `;
+    const details = document.getElementById("bulk-details");
+    const lines = [];
+    if (result.skipped.length) lines.push("<strong>Skipped:</strong><br>" + result.skipped.join("<br>"));
+    if (result.errors.length) lines.push("<strong>Errors:</strong><br>" + result.errors.join("<br>"));
+    details.innerHTML = lines.join("<br><br>");
+    document.getElementById("bulk-results").style.display = "block";
+
+    loadAllLots();
+    loadPackagesForRegister();
+    loadUpdatePackages();
+  } catch (err) {
+    showMsg(msg, err.message, "error");
+  }
 });
 
 // =====================================================

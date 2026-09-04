@@ -677,6 +677,134 @@ tbody tr:hover { background: var(--pink-light); }
   background: var(--pink-light);
 }
 
+.jig-preview-lg {
+  max-height: 320px;
+}
+
+/* ── Custom Jig/Tool picker (native <select> can't show images) ── */
+.jig-picker {
+  position: relative;
+}
+
+.jig-picker-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border: 1px solid var(--pink-border);
+  border-radius: var(--radius);
+  background: #fff;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.jig-picker-toggle:disabled {
+  background: var(--pink-light);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.jig-picker-toggle-thumb {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.jig-picker-toggle-thumb.jig-thumb,
+.jig-picker-toggle-thumb.jig-thumb-placeholder {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+
+.jig-picker-toggle-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jig-picker-caret {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.jig-picker-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--pink-border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  z-index: 10;
+}
+
+.jig-picker.open .jig-picker-list {
+  display: block;
+}
+
+.jig-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.jig-picker-row:last-child { border-bottom: none; }
+.jig-picker-row:hover { background: var(--pink-light); }
+
+.jig-picker-row-thumb {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+}
+
+.jig-picker-row-thumb.jig-thumb,
+.jig-picker-row-thumb.jig-thumb-placeholder {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+
+.jig-picker-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.jig-picker-row-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jig-picker-row-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.jig-picker-empty {
+  padding: 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 /* ── Image lightbox ── */
 .lightbox-backdrop {
   position: fixed;

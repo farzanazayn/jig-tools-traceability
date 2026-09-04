@@ -374,6 +374,41 @@
         </div>
       </div>
 
+      <div class="card">
+        <div class="card-title">Bulk Import Jig / Tool List</div>
+        <div class="card-body">
+          <p class="hint" style="margin-bottom:10px;">
+            Upload a spreadsheet (.xlsx or .csv) with columns like <strong>Description, BIN Location,
+            Stock in Hand, Part Type, Process, Machine, OEM Part Number</strong>. Optionally also select
+            picture files — they're matched to a row by filename = Description (e.g.
+            "Input Quad Alignment Jig.png").
+          </p>
+          <form id="bulk-form">
+            <label>Test Department <span class="req">*</span></label>
+            <select id="bulk-dept" required>
+              <option value="">-- Select Department --</option>
+              <option value="Test 1">Test 1</option>
+              <option value="Test 2">Test 2</option>
+            </select>
+            <label>Spreadsheet <span class="req">*</span></label>
+            <input type="file" id="bulk-file" accept=".xlsx,.xlsm,.csv" required />
+            <label>Pictures (optional, select multiple)</label>
+            <input type="file" id="bulk-images" accept="image/png,image/jpeg,image/webp,image/gif" multiple />
+            <button type="submit" class="btn">Import</button>
+            <div class="msg" id="bulk-msg"></div>
+            <div id="bulk-results" style="display:none; margin-top:14px;">
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Result</th><th>Count</th></tr></thead>
+                  <tbody id="bulk-summary-tbody"></tbody>
+                </table>
+              </div>
+              <div id="bulk-details" style="margin-top:10px; font-size:12px; color:var(--muted); max-height:200px; overflow-y:auto;"></div>
+            </div>
+          </form>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -399,7 +434,7 @@
 
 <!-- ============ POPUP: REQUEST JIG/TOOL ============ -->
 <div class="modal-backdrop" id="modal-request">
-  <div class="modal" style="max-width:560px;">
+  <div class="modal" style="max-width:760px;">
     <div class="modal-header"><h3>Request Jig / Tool</h3><p>Submit a request — pending admin approval</p></div>
     <div class="modal-body">
       <div class="form-row">
@@ -419,8 +454,16 @@
       <label>Technician Name</label>
       <input type="text" id="req-tech-name" readonly placeholder="Auto-filled from WBI" />
       <label>Jig / Tool <span class="req">*</span></label>
-      <select id="req-lot" disabled><option value="">-- Select department first --</option></select>
-      <img class="jig-preview" id="req-image-preview" alt="Preview" />
+      <input type="hidden" id="req-lot" value="" />
+      <div class="jig-picker" id="req-lot-picker">
+        <button type="button" class="jig-picker-toggle" id="req-lot-toggle" disabled>
+          <span class="jig-picker-toggle-thumb jig-thumb-placeholder">&#128736;&#65039;</span>
+          <span class="jig-picker-toggle-label">-- Select department first --</span>
+          <span class="jig-picker-caret">&#9662;</span>
+        </button>
+        <div class="jig-picker-list" id="req-lot-list"></div>
+      </div>
+      <img class="jig-preview jig-preview-lg" id="req-image-preview" alt="Preview" />
       <div class="form-row">
         <div><label>Rack Location</label><input type="text" id="req-location" readonly /></div>
         <div><label>Available Qty</label><input type="text" id="req-available" readonly /></div>
