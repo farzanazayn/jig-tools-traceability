@@ -1,0 +1,9 @@
+FROM nginx:1.25-alpine
+
+LABEL maintainer="NXP Test 1 & Test 2"
+LABEL description="Jig & Tools Maintenance Traceability System frontend (nginx)"
+
+COPY frontend/ /usr/share/nginx/html/
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 89

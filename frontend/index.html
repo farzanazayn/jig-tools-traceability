@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jig &amp; Tools Traceability System</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ============ NAVBAR ============ -->
+<div class="navbar">
+  <button class="sidebar-toggle" id="btn-sidebar-toggle">&#9776;</button>
+  <img class="logo" src="img/NXP_logo.png" alt="NXP" />
+  <span class="brand">Jig &amp; Tools Traceability System</span>
+  <div class="spacer"></div>
+  <div class="dt" id="live-clock">--/--/---- --:--:--</div>
+  <button class="btn-nav" id="btn-admin-login">Admin Login</button>
+  <button class="btn-nav btn-request" id="btn-open-request">+ Request Jig / Tool</button>
+</div>
+
+<!-- ============ LAYOUT ============ -->
+<div class="layout">
+
+  <!-- ===== SIDEBAR ===== -->
+  <div class="sidebar">
+    <div class="sidebar-item active" data-panel="main">&#127968; Main Dashboard</div>
+    <div class="sidebar-item" data-panel="queued">&#128203; Queued List <span class="tab-count" id="pending-count" style="margin-left:auto;">0</span></div>
+    <div class="sidebar-item" data-panel="lot-history">&#128230; Lot History</div>
+    <div class="sidebar-item" data-panel="help">&#10067; Help</div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-label admin-only">Admin</div>
+    <div class="sidebar-item admin-only" data-panel="update-packages">&#128230; Update Jig/Tool List</div>
+    <div class="sidebar-item admin-only" data-panel="register">&#9881;&#65039; Register</div>
+  </div>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <div class="main-content">
+
+    <!-- ======== PANEL: MAIN DASHBOARD ======== -->
+    <div class="panel active" id="panel-main">
+
+      <div class="guidance">
+        <strong>How to use:</strong> &nbsp;
+        Click <strong>+ Request Jig / Tool</strong> to borrow a jig or tool for maintenance. &nbsp;
+        Click <strong>Return</strong> on your row to return it. &nbsp;
+        Search by handler number to find your request. &nbsp;
+        WBI not found? Contact admin at
+        <a href="mailto:nurfarzana.jaafar@nxp.com" style="color:var(--primary);">nurfarzana.jaafar@nxp.com</a>
+      </div>
+
+      <div class="stats-mini">
+        <div class="stat-mini warn"><div class="stat-mini-label">Pending Approval</div><div class="stat-mini-val" id="stat-pending">0</div></div>
+        <div class="stat-mini ok"><div class="stat-mini-label">Active / Out</div><div class="stat-mini-val" id="stat-active">0</div></div>
+        <div class="stat-mini danger"><div class="stat-mini-label">Overdue &gt;14 days</div><div class="stat-mini-val" id="stat-overdue">0</div></div>
+      </div>
+
+      <div class="search-row">
+        <input type="text" id="search-box" placeholder="Search by Handler No, REQ No, Lot No, Jig/Tool Name..." />
+        <select id="dept-filter">
+          <option value="">All Departments</option>
+          <option value="Test 1">Test 1</option>
+          <option value="Test 2">Test 2</option>
+        </select>
+      </div>
+
+      <!-- BORROWED LIST -->
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-title">Borrowed List — click REQ No for details &middot; click Lot No for history</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th></th><th>REQ No</th><th>Lot No</th><th>Jig / Tool</th><th>Dept</th><th>Rack</th>
+                <th>Handler No</th><th>Technician</th><th>Qty</th>
+                <th>Purpose</th><th>Date Out</th><th>Duration</th><th>Status</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="borrowed-tbody"></tbody>
+          </table>
+          <div class="empty" id="borrowed-empty" style="display:none;">No active borrowed jigs/tools.</div>
+        </div>
+      </div>
+
+      <!-- MISSING UNIT LIST -->
+      <div class="card">
+        <div class="card-title">&#9888;&#65039; Missing / Lost Jig-Tool Dashboard</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Jig / Tool</th><th>Lot No</th><th>Technician</th>
+                <th>Missing Qty</th><th>Return Date</th><th>Duration</th>
+                <th id="missing-action-header"></th>
+              </tr>
+            </thead>
+            <tbody id="missing-tbody"></tbody>
+          </table>
+          <div class="empty" id="missing-empty" style="display:none;">No missing jig/tool cases.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== PANEL: QUEUED LIST ======== -->
+    <div class="panel" id="panel-queued">
+      <div class="section-header">
+        <div class="section-title">Queued List — All Requests</div>
+      </div>
+
+      <div class="dept-section">
+        <div class="dept-header">Test 2</div>
+        <div class="card" style="border-radius:0 0 8px 8px; margin-bottom:0;">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>REQ No</th><th>Lot No</th><th>Jig / Tool</th><th>Handler No</th>
+                  <th>Technician</th><th>Qty</th><th>Purpose</th><th>Submitted</th><th>Status</th>
+                  <th id="q2-action-col"></th>
+                </tr>
+              </thead>
+              <tbody id="queued-t2-tbody"></tbody>
+            </table>
+            <div class="empty" id="queued-t2-empty" style="display:none;">No requests for Test 2.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dept-section" style="margin-top:24px;">
+        <div class="dept-header">Test 1</div>
+        <div class="card" style="border-radius:0 0 8px 8px; margin-bottom:0;">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>REQ No</th><th>Lot No</th><th>Jig / Tool</th><th>Handler No</th>
+                  <th>Technician</th><th>Qty</th><th>Purpose</th><th>Submitted</th><th>Status</th>
+                  <th id="q1-action-col"></th>
+                </tr>
+              </thead>
+              <tbody id="queued-t1-tbody"></tbody>
+            </table>
+            <div class="empty" id="queued-t1-empty" style="display:none;">No requests for Test 1.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== PANEL: LOT HISTORY ======== -->
+    <div class="panel" id="panel-lot-history">
+      <div class="section-header">
+        <div class="section-title">Lot History</div>
+        <button class="btn-export" id="btn-export-excel" style="display:none;">&#128194; Export CSV</button>
+      </div>
+
+      <div class="search-combo">
+        <input type="text" id="lh-search" placeholder="Search by jig/tool name (e.g. Test Handler Jig)..." />
+        <input type="text" id="lh-rack" placeholder="Or by rack location (e.g. A1)..." />
+        <button class="btn" style="margin-top:0;" id="btn-lh-search">Search</button>
+      </div>
+
+      <div id="lh-results" style="display:none;">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title">Matching Jigs/Tools — click View History to load log</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Lot No</th><th>Jig / Tool</th><th>Dept</th><th>Rack</th><th>Current Qty</th><th></th></tr>
+              </thead>
+              <tbody id="lh-search-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="lh-detail" style="display:none;">
+        <div class="lot-summary" id="lh-summary-boxes"></div>
+        <div class="card">
+          <div class="card-title" id="lh-detail-title">Transaction Log</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Date &amp; Time</th><th>Action</th><th>Qty Change</th><th>Before</th><th>After</th><th>Technician / Admin</th><th>Reason / Notes</th></tr>
+              </thead>
+              <tbody id="lh-log-tbody"></tbody>
+            </table>
+            <div class="empty" id="lh-log-empty" style="display:none;">No history yet.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== PANEL: HELP ======== -->
+    <div class="panel" id="panel-help">
+      <div class="section-title" style="margin-bottom:20px;">Help &amp; User Guide</div>
+
+      <div class="help-section">
+        <h3>&#128229; How to Request a Jig / Tool</h3>
+        <div class="help-step"><div class="help-num">1</div><div>Click the <strong>+ Request Jig / Tool</strong> button at the top right.</div></div>
+        <div class="help-step"><div class="help-num">2</div><div>Select your <strong>Test Department</strong> (Test 1 or Test 2).</div></div>
+        <div class="help-step"><div class="help-num">3</div><div>Enter your <strong>WBI</strong> — your name will auto-fill.</div></div>
+        <div class="help-step"><div class="help-num">4</div><div>Select the <strong>jig / tool</strong> you need from the dropdown (photo shown for reference).</div></div>
+        <div class="help-step"><div class="help-num">5</div><div>Enter the <strong>quantity</strong> you need (e.g. 1 of 3 available).</div></div>
+        <div class="help-step"><div class="help-num">6</div><div>Enter the <strong>Handler Number</strong> of the machine (e.g. MX94).</div></div>
+        <div class="help-step"><div class="help-num">7</div><div>Fill in the <strong>Purpose</strong> (e.g. PM cycle) and click <strong>Submit Request</strong>.</div></div>
+        <div class="help-step"><div class="help-num">8</div><div>Your request will be reviewed by admin. Check <strong>Queued List</strong> for status.</div></div>
+      </div>
+
+      <div class="help-section">
+        <h3>&#128228; How to Return a Jig / Tool</h3>
+        <div class="help-step"><div class="help-num">1</div><div>Go to <strong>Main Dashboard</strong> and find your request in the Borrowed List.</div></div>
+        <div class="help-step"><div class="help-num">2</div><div>Search by your <strong>Handler Number</strong> if needed.</div></div>
+        <div class="help-step"><div class="help-num">3</div><div>Click the <strong>Return</strong> button on your row.</div></div>
+        <div class="help-step"><div class="help-num">4</div><div>Enter your <strong>WBI</strong> and fill in the condition breakdown (Good / Damaged / Missing).</div></div>
+        <div class="help-step"><div class="help-num">5</div><div>Click <strong>Confirm Return</strong>. Stock will be updated automatically.</div></div>
+      </div>
+
+      <div class="help-section">
+        <h3>&#128203; How to Track Your Request</h3>
+        <div class="help-step"><div class="help-num">1</div><div>Click <strong>Queued List</strong> in the left menu.</div></div>
+        <div class="help-step"><div class="help-num">2</div><div>Find your request by REQ number or handler number.</div></div>
+        <div class="help-step"><div class="help-num">3</div><div>Status: <strong>Pending</strong> (waiting for admin), <strong>Active</strong> (approved), <strong>Rejected</strong>.</div></div>
+      </div>
+
+      <div class="help-section">
+        <h3>&#9888;&#65039; Important Reminders</h3>
+        <div class="help-step"><div class="help-num">!</div><div>Always enter the <strong>correct handler number</strong> when requesting.</div></div>
+        <div class="help-step"><div class="help-num">!</div><div>Return jigs/tools <strong>promptly</strong> after PM cycle completion.</div></div>
+        <div class="help-step"><div class="help-num">!</div><div>Report any <strong>missing or damaged jig/tool immediately</strong> to your supervisor and admin.</div></div>
+        <div class="help-step"><div class="help-num">!</div><div>Items overdue more than <strong>14 days</strong> will be flagged in the system.</div></div>
+      </div>
+
+      <div class="help-section">
+        <h3>&#128222; Contact Admin</h3>
+        <div class="help-contact">
+          <strong>Nur Farzana Jaafar</strong>
+          For WBI registration or system assistance:<br/>
+          &#128231; <a href="mailto:nurfarzana.jaafar@nxp.com" style="color:var(--primary);">nurfarzana.jaafar@nxp.com</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== PANEL: UPDATE JIG/TOOL LIST (ADMIN) ======== -->
+    <div class="panel" id="panel-update-packages">
+      <div class="section-title" style="margin-bottom:16px;">Update Jig / Tool List</div>
+
+      <div class="dept-section">
+        <div class="dept-header">Test 2</div>
+        <div class="card" style="border-radius:0 0 8px 8px; margin-bottom:0;">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th></th><th>Lot No</th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th><th>Damaged</th><th>Missing</th><th>Limit</th><th>Status</th><th>Action</th></tr>
+              </thead>
+              <tbody id="pkg-t2-tbody"></tbody>
+            </table>
+            <div class="empty" id="pkg-t2-empty" style="display:none;">No Test 2 lots.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dept-section" style="margin-top:24px;">
+        <div class="dept-header">Test 1</div>
+        <div class="card" style="border-radius:0 0 8px 8px; margin-bottom:0;">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th></th><th>Lot No</th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th><th>Damaged</th><th>Missing</th><th>Limit</th><th>Status</th><th>Action</th></tr>
+              </thead>
+              <tbody id="pkg-t1-tbody"></tbody>
+            </table>
+            <div class="empty" id="pkg-t1-empty" style="display:none;">No Test 1 lots.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== PANEL: REGISTER (ADMIN) ======== -->
+    <div class="panel" id="panel-register">
+
+      <div class="card">
+        <div class="card-title">Add Technician / Register WBI</div>
+        <div class="card-body">
+          <form id="tech-form">
+            <div class="form-row">
+              <div>
+                <label>WBI <span class="req">*</span></label>
+                <input type="text" id="tech-wbi" placeholder="e.g. nxa12345" required />
+              </div>
+              <div>
+                <label>Full Name <span class="req">*</span></label>
+                <input type="text" id="tech-name" placeholder="e.g. Ahmad Faiz" required />
+              </div>
+            </div>
+            <label>Test Department <span class="req">*</span></label>
+            <select id="tech-dept" required>
+              <option value="">-- Select Department --</option>
+              <option value="Test 1">Test 1</option>
+              <option value="Test 2">Test 2</option>
+              <option value="Test 1, Test 2">Both (Test 1 &amp; Test 2)</option>
+            </select>
+            <button type="submit" class="btn">Add Technician</button>
+            <div class="msg" id="tech-msg"></div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Add Jig / Tool (Master List)</div>
+        <div class="card-body">
+          <form id="package-form">
+            <div class="form-row">
+              <div>
+                <label>Jig / Tool Name <span class="req">*</span></label>
+                <input type="text" id="pkg-name" required />
+              </div>
+              <div>
+                <label>Type <span class="req">*</span></label>
+                <select id="pkg-type" required>
+                  <option value="Jig">Jig</option>
+                  <option value="Tool">Tool</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label>Test Department <span class="req">*</span></label>
+                <select id="pkg-dept" required>
+                  <option value="">-- Select Department --</option>
+                  <option value="Test 1">Test 1</option>
+                  <option value="Test 2">Test 2</option>
+                </select>
+              </div>
+              <div>
+                <label>Default Rack Location <span class="req">*</span></label>
+                <input type="text" id="pkg-location" placeholder="e.g. A1" required />
+              </div>
+            </div>
+            <label>Default Qty <span class="req">*</span></label>
+            <input type="number" id="pkg-qty" min="0" required />
+            <label>Picture</label>
+            <input type="file" id="pkg-image" accept="image/png,image/jpeg,image/webp,image/gif" />
+            <img class="jig-preview" id="pkg-image-preview" alt="Preview" />
+            <button type="submit" class="btn">Add Jig / Tool</button>
+            <div class="msg" id="package-msg"></div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Register New Jig / Tool Lot</div>
+        <div class="card-body">
+          <form id="lot-form">
+            <label>Jig / Tool <span class="req">*</span></label>
+            <select id="lot-package" required></select>
+            <div class="form-row">
+              <div>
+                <label>Rack Location <span class="req">*</span></label>
+                <input type="text" id="lot-location" required />
+              </div>
+              <div>
+                <label>Qty (Good Units) <span class="req">*</span></label>
+                <input type="number" id="lot-qty" min="1" required />
+              </div>
+            </div>
+            <label>Replenish Limit (defect units before alert)</label>
+            <input type="number" id="lot-limit" min="1" value="5" />
+            <label>Lot Number <span class="req">*</span></label>
+            <input type="text" id="lot-number" placeholder="e.g. JIG00100" required/>
+            <button type="submit" class="btn">Register Lot</button>
+            <div class="msg" id="lot-msg"></div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- ============ POPUP: ADMIN LOGIN ============ -->
+<div class="modal-backdrop" id="modal-login">
+  <div class="modal">
+    <div class="modal-header"><h3>Admin Login</h3><p>Enter your credentials to access admin features</p></div>
+    <div class="modal-body">
+      <label>Username <span class="req">*</span></label>
+      <input type="text" id="login-username" placeholder="e.g. farzanaJ" autocomplete="username" />
+      <label>Password <span class="req">*</span></label>
+      <input type="password" id="login-password" placeholder="********" autocomplete="current-password" />
+      <div class="msg" id="login-msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePopup('modal-login')">Cancel</button>
+      <button class="btn" id="btn-do-login">Login</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ POPUP: REQUEST JIG/TOOL ============ -->
+<div class="modal-backdrop" id="modal-request">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header"><h3>Request Jig / Tool</h3><p>Submit a request — pending admin approval</p></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div>
+          <label>Test Department <span class="req">*</span></label>
+          <select id="req-dept">
+            <option value="">-- Select Department --</option>
+            <option value="Test 1">Test 1</option>
+            <option value="Test 2">Test 2</option>
+          </select>
+        </div>
+        <div>
+          <label>WBI <span class="req">*</span></label>
+          <input type="text" id="req-tech-id" placeholder="Enter your WBI" />
+        </div>
+      </div>
+      <label>Technician Name</label>
+      <input type="text" id="req-tech-name" readonly placeholder="Auto-filled from WBI" />
+      <label>Jig / Tool <span class="req">*</span></label>
+      <select id="req-lot" disabled><option value="">-- Select department first --</option></select>
+      <img class="jig-preview" id="req-image-preview" alt="Preview" />
+      <div class="form-row">
+        <div><label>Rack Location</label><input type="text" id="req-location" readonly /></div>
+        <div><label>Available Qty</label><input type="text" id="req-available" readonly /></div>
+      </div>
+      <div class="form-row">
+        <div><label>Qty Needed <span class="req">*</span></label><input type="number" id="req-qty" min="1" value="1" /></div>
+        <div><label>Handler No <span class="req">*</span></label><input type="text" id="req-handler" placeholder="e.g. MX94" /></div>
+      </div>
+      <label>Date &amp; Time</label>
+      <input type="text" id="req-clock" readonly />
+      <label>Purpose <span class="req">*</span></label>
+      <input type="text" id="req-purpose" placeholder="e.g. PM cycle Line 3" />
+      <div class="msg" id="request-msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePopup('modal-request')">Cancel</button>
+      <button class="btn" id="btn-submit-request">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ POPUP: RETURN ============ -->
+<div class="modal-backdrop" id="modal-return">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-header pink"><h3 id="return-title">Return Jig / Tool</h3><p id="return-subtitle"></p></div>
+    <div class="modal-body">
+      <div style="background:var(--pink-light); border-radius:6px; padding:9px 11px; font-size:12.5px; margin-bottom:12px;" id="return-borrower-info"></div>
+      <div class="form-row">
+        <div>
+          <label>Returning WBI <span class="req">*</span></label>
+          <input type="text" id="ret-tech-id" placeholder="Enter WBI of person returning" />
+        </div>
+        <div>
+          <label>Returning Tech Name</label>
+          <input type="text" id="ret-tech-name" readonly placeholder="Auto-filled" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div><label>Good Units <span class="req">*</span></label><input type="number" id="ret-good" min="0" value="0" /></div>
+        <div><label>Damaged Qty</label><input type="number" id="ret-damaged" min="0" value="0" /></div>
+      </div>
+      <label>Missing Qty</label>
+      <input type="number" id="ret-missing" min="0" value="0" />
+      <div class="totals-check" id="return-totals"></div>
+      <label>Return Date &amp; Time</label>
+      <input type="text" value="Auto assigned on submit" readonly />
+      <div class="msg" id="return-msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePopup('modal-return')">Cancel</button>
+      <button class="btn" style="background:var(--accent)" id="btn-confirm-return">Confirm Return</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ POPUP: APPROVE / REJECT ============ -->
+<div class="modal-backdrop" id="modal-approve">
+  <div class="modal">
+    <div class="modal-header warn"><h3 id="approve-title">Review Request</h3><p id="approve-subtitle"></p></div>
+    <div class="modal-body" id="approve-body"></div>
+    <div class="msg" id="approve-msg" style="margin:0 18px 12px;"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePopup('modal-approve')">Cancel</button>
+      <button class="btn btn-danger" id="btn-reject">Reject</button>
+      <button class="btn btn-ok" id="btn-approve">Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ POPUP: REQ DETAIL ============ -->
+<div class="modal-backdrop" id="modal-req-detail">
+  <div class="modal">
+    <div class="modal-header" style="background:#2e7d7a;"><h3 id="reqd-title">Request Details</h3><p id="reqd-subtitle"></p></div>
+    <div class="modal-body" id="reqd-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePopup('modal-req-detail')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ POPUP: UPDATE LOT DETAILS ============ -->
+<div class="modal-backdrop" id="modal-update-lot">
+  <div class="modal">
+    <div class="modal-header" style="background:#1a56db;"><h3 id="ul-title">Update Details</h3><p id="ul-subtitle"></p></div>
+    <div class="modal-body">
+      <label>Lot Number</label>
+      <input type="text" id="ul-lot-number" placeholder="Enter new lot number or keep current" />
+      <label>Current Qty</label>
+      <input type="text" id="ul-current-qty" readonly />
+      <label>New Qty (leave blank to keep current)</label>
+      <input type="number" id="ul-new-qty" min="0" placeholder="Enter new qty" />
+      <label>Rack Location</label>
+      <input type="text" id="ul-location" placeholder="Enter new location or keep current" />
+      <label>Reason <span class="req">*</span></label>
+      <select id="ul-reason">
+        <option value="Monthly qty check">Monthly qty check</option>
+        <option value="Replenishment">Replenishment</option>
+        <option value="Stock correction">Stock correction</option>
+        <option value="Location change">Location change</option>
+      </select>
+      <div class="msg" id="ul-msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePopup('modal-update-lot')">Cancel</button>
+      <button class="btn" id="btn-save-lot-update">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ POPUP: RESOLVE MISSING UNIT ============ -->
+<div class="modal-backdrop" id="modal-resolve-missing">
+  <div class="modal">
+    <div class="modal-header warn"><h3>Resolve Missing Jig/Tool</h3><p id="rm-subtitle"></p></div>
+    <div class="modal-body">
+      <div style="background:var(--warn-bg); border-radius:6px; padding:9px 11px; font-size:12.5px; margin-bottom:12px;" id="rm-info"></div>
+      <label>Good Units Recovered</label>
+      <input type="number" id="rm-good" min="0" value="0" />
+      <label>Damaged Units</label>
+      <input type="number" id="rm-damaged" min="0" value="0" />
+      <p class="hint" style="margin-top:6px;">Good recovered + Damaged must not exceed missing qty. Recovered good units will be added back to stock.</p>
+      <div class="msg" id="rm-msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePopup('modal-resolve-missing')">Cancel</button>
+      <button class="btn btn-ok" id="btn-confirm-resolve">Confirm Resolve</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ IMAGE LIGHTBOX ============ -->
+<div class="lightbox-backdrop" id="lightbox">
+  <img id="lightbox-img" src="" alt="Jig/Tool" />
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
