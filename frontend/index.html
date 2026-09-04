@@ -379,8 +379,10 @@
         <div class="card-body">
           <p class="hint" style="margin-bottom:10px;">
             Upload a spreadsheet (.xlsx or .csv) with columns like <strong>Description, BIN Location,
-            Stock in Hand, Part Type, Process, Machine, OEM Part Number</strong>. Optionally also select
-            picture files — they're matched to a row by filename = Description (e.g.
+            Stock in Hand, Part Type, Process, Machine, OEM Part Number</strong>. If your .xlsx has
+            pictures pasted directly into the Picture column, they're pulled automatically — no need
+            to select picture files separately. Only use the picture upload below if your pictures are
+            separate image files (matched to a row by filename = Description, e.g.
             "Input Quad Alignment Jig.png").
           </p>
           <form id="bulk-form">

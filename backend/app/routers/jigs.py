@@ -112,9 +112,37 @@ _HEADER_ALIASES = {
 }
 
 
+_IMAGE_FORMAT_MIME = {
+    "png": "image/png", "jpeg": "image/jpeg", "jpg": "image/jpeg",
+    "gif": "image/gif", "bmp": "image/bmp",
+}
+
+
+def _extract_embedded_images(ws) -> dict:
+    """Maps 0-indexed sheet row -> (bytes, mime) for images embedded/anchored in the sheet.
+    If a row has more than one image anchored, the first one wins."""
+    result = {}
+    for img in getattr(ws, "_images", []):
+        try:
+            row = img.anchor._from.row
+            if row in result:
+                continue
+            data = img._data()
+            if len(data) > MAX_IMAGE_BYTES:
+                continue
+            mime = _IMAGE_FORMAT_MIME.get((img.format or "").lower(), "image/png")
+            result[row] = (data, mime)
+        except Exception:
+            continue
+    return result
+
+
 def _read_rows(filename: str, data: bytes):
-    """Yields dicts of normalized-field -> raw value, from an .xlsx or .csv file."""
+    """Returns (records, embedded_images) — records is a list of normalized-field dicts,
+    embedded_images maps the record's list index -> (bytes, mime) for any picture embedded
+    directly in that row of the spreadsheet (xlsx only)."""
     lower = filename.lower()
+    embedded_by_row = {}
     if lower.endswith(".csv"):
         text = data.decode("utf-8-sig")
         reader = csv.reader(io.StringIO(text))
@@ -123,11 +151,12 @@ def _read_rows(filename: str, data: bytes):
         wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
         ws = wb.worksheets[0]
         rows = [list(r) for r in ws.iter_rows(values_only=True)]
+        embedded_by_row = _extract_embedded_images(ws)
     else:
         raise HTTPException(status_code=400, detail="Spreadsheet must be .xlsx or .csv")
 
     if not rows:
-        return
+        return [], {}
 
     header_row = rows[0]
     field_by_col = {}
@@ -139,12 +168,18 @@ def _read_rows(filename: str, data: bytes):
     if "description" not in field_by_col.values():
         raise HTTPException(status_code=400, detail="Could not find a 'Description' column in the spreadsheet.")
 
-    for row in rows[1:]:
+    records = []
+    embedded_by_record_idx = {}
+    for row_idx, row in enumerate(rows[1:], start=1):
         record = {}
         for idx, field in field_by_col.items():
             record[field] = row[idx] if idx < len(row) else None
         if record.get("description"):
-            yield record
+            if row_idx in embedded_by_row:
+                embedded_by_record_idx[len(records)] = embedded_by_row[row_idx]
+            records.append(record)
+
+    return records, embedded_by_record_idx
 
 
 @router.post("/bulk-import")
@@ -161,7 +196,7 @@ async def bulk_import_jigs(
 
     sheet_bytes = await file.read()
     try:
-        records = list(_read_rows(file.filename, sheet_bytes))
+        records, embedded_images = _read_rows(file.filename, sheet_bytes)
     except HTTPException:
         raise
     except Exception as e:
@@ -185,8 +220,9 @@ async def bulk_import_jigs(
     created = []
     skipped = []
     errors = []
+    pictures_matched = 0
 
-    for record in records:
+    for record_idx, record in enumerate(records):
         name = str(record.get("description") or "").strip()
         if not name:
             continue
@@ -206,12 +242,24 @@ async def bulk_import_jigs(
             rack_location = str(record.get("rack_location") or "").strip()
             code = str(record.get("code") or "").strip()
 
+            image_data = image_mime = None
+            match = image_by_key.get(_normalize(name)) or embedded_images.get(record_idx)
+            if match:
+                image_data, image_mime = match
+
             existing_jig = db.query(models.JigTool).filter(
                 models.JigTool.jig_tool_name == name,
                 models.JigTool.department == row_department,
             ).first()
             if existing_jig:
-                skipped.append(f"{name}: a jig/tool with this name already exists in {row_department}")
+                if match and not existing_jig.image_data:
+                    existing_jig.image_data = image_data
+                    existing_jig.image_mime = image_mime
+                    db.commit()
+                    pictures_matched += 1
+                    skipped.append(f"{name}: already existed — picture added")
+                else:
+                    skipped.append(f"{name}: a jig/tool with this name already exists in {row_department}")
                 continue
 
             lot_number = code if code else _normalize(name)[:45].upper() or f"IMPORT-{len(created)+1}"
@@ -219,10 +267,8 @@ async def bulk_import_jigs(
                 skipped.append(f"{name}: lot number '{lot_number}' already exists")
                 continue
 
-            image_data = image_mime = None
-            match = image_by_key.get(_normalize(name))
             if match:
-                image_data, image_mime = match
+                pictures_matched += 1
 
             jig_tool = models.JigTool(
                 jig_tool_name=name,
@@ -274,8 +320,9 @@ async def bulk_import_jigs(
         "created": created,
         "skipped": skipped,
         "errors": errors,
-        "pictures_matched": sum(1 for n in created if _normalize(n) in image_by_key),
+        "pictures_matched": pictures_matched,
         "pictures_uploaded": len(image_by_key),
+        "pictures_embedded_in_sheet": len(embedded_images),
     }
 
 

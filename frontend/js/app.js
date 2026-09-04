@@ -865,7 +865,8 @@ document.getElementById("bulk-form").addEventListener("submit", async (e) => {
       <tr><td>Created</td><td>${result.created_count}</td></tr>
       <tr><td>Skipped (already existed)</td><td>${result.skipped_count}</td></tr>
       <tr><td>Errors</td><td>${result.error_count}</td></tr>
-      <tr><td>Pictures uploaded</td><td>${result.pictures_uploaded}</td></tr>
+      <tr><td>Pictures embedded in sheet</td><td>${result.pictures_embedded_in_sheet}</td></tr>
+      <tr><td>Pictures uploaded separately</td><td>${result.pictures_uploaded}</td></tr>
       <tr><td>Pictures matched to a row</td><td>${result.pictures_matched}</td></tr>
     `;
     const details = document.getElementById("bulk-details");
