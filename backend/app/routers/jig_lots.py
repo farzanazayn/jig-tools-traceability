@@ -1,11 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+import re
 import traceback
 from .. import models, schemas
 from ..database import get_db
 
 router = APIRouter(prefix="/api/lots", tags=["jig-lots"])
+
+
+def _generate_lot_number(db: Session, jig_tool_name: str) -> str:
+    """Lot numbers are an internal bookkeeping detail, not shown in the UI —
+    derive one from the jig/tool name and disambiguate on collision."""
+    base = re.sub(r"[^A-Z0-9]+", "-", jig_tool_name.upper()).strip("-")[:40] or "LOT"
+    candidate = base
+    suffix = 1
+    while db.query(models.JigToolLot).filter(models.JigToolLot.lot_number == candidate).first():
+        suffix += 1
+        candidate = f"{base}-{suffix}"
+    return candidate
 
 
 def _lot_to_out(lot: models.JigToolLot) -> schemas.LotOut:
@@ -36,13 +49,7 @@ def register_lot(payload: schemas.LotCreate, db: Session = Depends(get_db)):
         if not jig_tool:
             raise HTTPException(status_code=404, detail="Jig/Tool not found")
 
-        lot_number = payload.lot_number.strip().upper()
-        if not lot_number:
-            raise HTTPException(status_code=400, detail="Lot number is required.")
-
-        existing = db.query(models.JigToolLot).filter(models.JigToolLot.lot_number == lot_number).first()
-        if existing:
-            raise HTTPException(status_code=400, detail=f"Lot number '{lot_number}' already exists.")
+        lot_number = _generate_lot_number(db, jig_tool.jig_tool_name)
 
         lot = models.JigToolLot(
             lot_number=lot_number,
@@ -62,8 +69,8 @@ def register_lot(payload: schemas.LotCreate, db: Session = Depends(get_db)):
             qty_before=0,
             qty_after=payload.initial_qty,
             qty_change=payload.initial_qty,
-            reason="Initial lot registration",
-            notes=f"Lot {lot_number} registered with {payload.initial_qty} units",
+            reason="Initial registration",
+            notes=f"Registered with {payload.initial_qty} unit(s) at {payload.rack_location}",
         )
         db.add(history)
         db.commit()
@@ -93,18 +100,6 @@ def update_lot(lot_id: int, payload: schemas.LotUpdate, db: Session = Depends(ge
 
         qty_before = lot.current_qty
         loc_before = lot.rack_location
-        lot_number_before = lot.lot_number
-
-        if payload.lot_number is not None and payload.lot_number.strip():
-            new_lot_number = payload.lot_number.strip().upper()
-            if new_lot_number != lot.lot_number:
-                existing = db.query(models.JigToolLot).filter(
-                    models.JigToolLot.lot_number == new_lot_number,
-                    models.JigToolLot.lot_id != lot.lot_id
-                ).first()
-                if existing:
-                    raise HTTPException(status_code=400, detail=f"Lot number '{new_lot_number}' already exists.")
-                lot.lot_number = new_lot_number
 
         if payload.new_qty is not None:
             lot.current_qty = payload.new_qty
@@ -114,13 +109,7 @@ def update_lot(lot_id: int, payload: schemas.LotUpdate, db: Session = Depends(ge
             lot.rack_location = payload.rack_location
 
         action = "QTY_UPDATE" if payload.new_qty is not None else "LOCATION_CHANGE"
-        if lot_number_before != lot.lot_number:
-            action = "LOT_NUMBER_CHANGE" if action == "LOCATION_CHANGE" else action
-
-        notes_parts = [f"Updated by {admin.full_name}"]
-        if lot_number_before != lot.lot_number:
-            notes_parts.append(f"Lot No: {lot_number_before} → {lot.lot_number}")
-        notes_parts_str = " | ".join(notes_parts)
+        notes_parts_str = f"Updated by {admin.full_name}"
 
         history = models.JigLotHistory(
             lot_id=lot.lot_id,
@@ -166,9 +155,10 @@ def delete_lot(lot_id: int, admin_username: str, db: Session = Depends(get_db)):
         if active:
             raise HTTPException(status_code=400, detail="Cannot delete lot with active or pending requests.")
 
+        name = lot.jig_tool.jig_tool_name
         db.delete(lot)
         db.commit()
-        return {"message": f"Lot {lot.lot_number} deleted."}
+        return {"message": f"'{name}' deleted."}
 
     except HTTPException:
         raise

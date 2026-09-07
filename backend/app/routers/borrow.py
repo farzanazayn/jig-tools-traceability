@@ -54,12 +54,12 @@ def create_request(payload: schemas.RequestCreate, db: Session = Depends(get_db)
             raise HTTPException(status_code=404, detail="WBI not found. Please check your WBI or contact admin.")
 
         if lot.current_qty <= 0:
-            raise HTTPException(status_code=400, detail=f"No units available for lot {lot.lot_number}.")
+            raise HTTPException(status_code=400, detail=f"No units available for {lot.jig_tool.jig_tool_name}.")
 
         if payload.requested_qty > lot.current_qty:
             raise HTTPException(
                 status_code=400,
-                detail=f"Only {lot.current_qty} unit(s) available for lot {lot.lot_number}."
+                detail=f"Only {lot.current_qty} unit(s) available for {lot.jig_tool.jig_tool_name}."
             )
 
         next_val = db.execute(text(f'SELECT nextval(\'"{DB_SCHEMA}".jig_request_number_seq\')')).scalar()

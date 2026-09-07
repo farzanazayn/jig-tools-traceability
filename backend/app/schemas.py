@@ -31,7 +31,6 @@ class JigToolOut(BaseModel):
 
 
 class LotCreate(BaseModel):
-    lot_number: str
     jig_tool_id: int
     rack_location: str
     initial_qty: int = Field(gt=0)
@@ -51,7 +50,6 @@ class LotOut(BaseModel):
         from_attributes = True
 
 class LotUpdate(BaseModel):
-    lot_number: Optional[str] = None
     new_qty: Optional[int] = None
     rack_location: Optional[str] = None
     reason: str

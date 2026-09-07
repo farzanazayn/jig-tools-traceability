@@ -25,6 +25,7 @@
   <!-- ===== SIDEBAR ===== -->
   <div class="sidebar">
     <div class="sidebar-item active" data-panel="main">&#127968; Main Dashboard</div>
+    <div class="sidebar-item" data-panel="request">&#10133; Request Jig / Tool</div>
     <div class="sidebar-item" data-panel="queued">&#128203; Queued List <span class="tab-count" id="pending-count" style="margin-left:auto;">0</span></div>
     <div class="sidebar-item" data-panel="lot-history">&#128230; Stock History</div>
     <div class="sidebar-item" data-panel="help">&#10067; Help</div>
@@ -56,7 +57,7 @@
       </div>
 
       <div class="search-row">
-        <input type="text" id="search-box" placeholder="Search by Handler No, REQ No, Lot No, Jig/Tool Name..." />
+        <input type="text" id="search-box" placeholder="Search by Handler No, REQ No, Jig/Tool Name..." />
         <select id="dept-filter">
           <option value="">All Departments</option>
           <option value="Test 1">Test 1</option>
@@ -66,12 +67,12 @@
 
       <!-- BORROWED LIST -->
       <div class="card" style="margin-bottom:24px;">
-        <div class="card-title">Borrowed List — click REQ No for details &middot; click Lot No for history</div>
+        <div class="card-title">Borrowed List — click REQ No for details &middot; click Jig/Tool for history</div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th></th><th>REQ No</th><th>Lot No</th><th>Jig / Tool</th><th>Dept</th><th>Rack</th>
+                <th></th><th>REQ No</th><th>Jig / Tool</th><th>Dept</th><th>Rack</th>
                 <th>Handler No</th><th>Technician</th><th>Qty</th>
                 <th>Purpose</th><th>Date Out</th><th>Duration</th><th>Status</th><th></th>
               </tr>
@@ -79,6 +80,58 @@
             <tbody id="borrowed-tbody"></tbody>
           </table>
           <div class="empty" id="borrowed-empty" style="display:none;">No active borrowed jigs/tools.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== PANEL: REQUEST JIG/TOOL ======== -->
+    <div class="panel" id="panel-request">
+      <div class="section-title" style="margin-bottom:16px;">Request Jig / Tool</div>
+
+      <div class="card">
+        <div class="card-title">Submit a request — pending admin approval</div>
+        <div class="card-body">
+          <div class="form-row">
+            <div>
+              <label>Test Department <span class="req">*</span></label>
+              <select id="req-dept">
+                <option value="">-- Select Department --</option>
+                <option value="Test 1">Test 1</option>
+                <option value="Test 2">Test 2</option>
+              </select>
+            </div>
+            <div>
+              <label>WBI <span class="req">*</span></label>
+              <input type="text" id="req-tech-id" placeholder="Enter your WBI" />
+            </div>
+          </div>
+          <label>Technician Name</label>
+          <input type="text" id="req-tech-name" readonly placeholder="Auto-filled from WBI" />
+          <label>Jig / Tool <span class="req">*</span></label>
+          <input type="hidden" id="req-lot" value="" />
+          <div class="jig-picker" id="req-lot-picker">
+            <button type="button" class="jig-picker-toggle" id="req-lot-toggle" disabled>
+              <span class="jig-picker-toggle-thumb jig-thumb-placeholder">&#128736;&#65039;</span>
+              <span class="jig-picker-toggle-label">-- Select department first --</span>
+              <span class="jig-picker-caret">&#9662;</span>
+            </button>
+            <div class="jig-picker-list" id="req-lot-list"></div>
+          </div>
+          <img class="jig-preview jig-preview-lg" id="req-image-preview" alt="Preview" />
+          <div class="form-row">
+            <div><label>Rack Location</label><input type="text" id="req-location" readonly /></div>
+            <div><label>Available Qty</label><input type="text" id="req-available" readonly /></div>
+          </div>
+          <div class="form-row">
+            <div><label>Qty Needed <span class="req">*</span></label><input type="number" id="req-qty" min="1" value="1" /></div>
+            <div><label>Handler No <span class="req">*</span></label><input type="text" id="req-handler" placeholder="e.g. MX94" /></div>
+          </div>
+          <label>Date &amp; Time</label>
+          <input type="text" id="req-clock" readonly />
+          <label>Purpose <span class="req">*</span></label>
+          <input type="text" id="req-purpose" placeholder="e.g. PM cycle Line 3" />
+          <button class="btn" id="btn-submit-request">Submit Request</button>
+          <div class="msg" id="request-msg"></div>
         </div>
       </div>
     </div>
@@ -96,7 +149,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>REQ No</th><th>Lot No</th><th>Jig / Tool</th><th>Handler No</th>
+                  <th>REQ No</th><th>Jig / Tool</th><th>Handler No</th>
                   <th>Technician</th><th>Qty</th><th>Purpose</th><th>Submitted</th><th>Status</th>
                   <th id="q2-action-col"></th>
                 </tr>
@@ -115,7 +168,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>REQ No</th><th>Lot No</th><th>Jig / Tool</th><th>Handler No</th>
+                  <th>REQ No</th><th>Jig / Tool</th><th>Handler No</th>
                   <th>Technician</th><th>Qty</th><th>Purpose</th><th>Submitted</th><th>Status</th>
                   <th id="q1-action-col"></th>
                 </tr>
@@ -367,7 +420,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">Register New Jig / Tool Lot</div>
+        <div class="card-title">Register New Stock</div>
         <div class="card-body">
           <form id="lot-form">
             <label>Jig / Tool <span class="req">*</span></label>
@@ -382,9 +435,7 @@
                 <input type="number" id="lot-qty" min="1" required />
               </div>
             </div>
-            <label>Lot Number <span class="req">*</span></label>
-            <input type="text" id="lot-number" placeholder="e.g. JIG00100" required/>
-            <button type="submit" class="btn">Register Lot</button>
+            <button type="submit" class="btn">Register</button>
             <div class="msg" id="lot-msg"></div>
           </form>
         </div>
@@ -450,59 +501,6 @@
   </div>
 </div>
 
-<!-- ============ POPUP: REQUEST JIG/TOOL ============ -->
-<div class="modal-backdrop" id="modal-request">
-  <div class="modal" style="max-width:760px;">
-    <div class="modal-header"><h3>Request Jig / Tool</h3><p>Submit a request — pending admin approval</p></div>
-    <div class="modal-body">
-      <div class="form-row">
-        <div>
-          <label>Test Department <span class="req">*</span></label>
-          <select id="req-dept">
-            <option value="">-- Select Department --</option>
-            <option value="Test 1">Test 1</option>
-            <option value="Test 2">Test 2</option>
-          </select>
-        </div>
-        <div>
-          <label>WBI <span class="req">*</span></label>
-          <input type="text" id="req-tech-id" placeholder="Enter your WBI" />
-        </div>
-      </div>
-      <label>Technician Name</label>
-      <input type="text" id="req-tech-name" readonly placeholder="Auto-filled from WBI" />
-      <label>Jig / Tool <span class="req">*</span></label>
-      <input type="hidden" id="req-lot" value="" />
-      <div class="jig-picker" id="req-lot-picker">
-        <button type="button" class="jig-picker-toggle" id="req-lot-toggle" disabled>
-          <span class="jig-picker-toggle-thumb jig-thumb-placeholder">&#128736;&#65039;</span>
-          <span class="jig-picker-toggle-label">-- Select department first --</span>
-          <span class="jig-picker-caret">&#9662;</span>
-        </button>
-        <div class="jig-picker-list" id="req-lot-list"></div>
-      </div>
-      <img class="jig-preview jig-preview-lg" id="req-image-preview" alt="Preview" />
-      <div class="form-row">
-        <div><label>Rack Location</label><input type="text" id="req-location" readonly /></div>
-        <div><label>Available Qty</label><input type="text" id="req-available" readonly /></div>
-      </div>
-      <div class="form-row">
-        <div><label>Qty Needed <span class="req">*</span></label><input type="number" id="req-qty" min="1" value="1" /></div>
-        <div><label>Handler No <span class="req">*</span></label><input type="text" id="req-handler" placeholder="e.g. MX94" /></div>
-      </div>
-      <label>Date &amp; Time</label>
-      <input type="text" id="req-clock" readonly />
-      <label>Purpose <span class="req">*</span></label>
-      <input type="text" id="req-purpose" placeholder="e.g. PM cycle Line 3" />
-      <div class="msg" id="request-msg"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closePopup('modal-request')">Cancel</button>
-      <button class="btn" id="btn-submit-request">Submit Request</button>
-    </div>
-  </div>
-</div>
-
 <!-- ============ POPUP: RETURN ============ -->
 <div class="modal-backdrop" id="modal-return">
   <div class="modal" style="max-width:500px;">
@@ -560,8 +558,6 @@
   <div class="modal">
     <div class="modal-header" style="background:#1a56db;"><h3 id="ul-title">Update Details</h3><p id="ul-subtitle"></p></div>
     <div class="modal-body">
-      <label>Lot Number</label>
-      <input type="text" id="ul-lot-number" placeholder="Enter new lot number or keep current" />
       <label>Current Qty</label>
       <input type="text" id="ul-current-qty" readonly />
       <label>New Qty (leave blank to keep current)</label>

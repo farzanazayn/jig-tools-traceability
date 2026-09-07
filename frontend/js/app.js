@@ -53,23 +53,29 @@ function updateClock() {
 updateClock();
 setInterval(updateClock, 1000);
 
-// ── Sidebar navigation ──────────────────────────────
+// ── Panel navigation ──────────────────────────────
+function activatePanel(panelKey) {
+  document.querySelectorAll(".sidebar-item").forEach(i => i.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  const item = document.querySelector(`.sidebar-item[data-panel="${panelKey}"]`);
+  if (item) item.classList.add("active");
+  document.getElementById(`panel-${panelKey}`).classList.add("active");
+  if (panelKey === "update-packages") loadUpdatePackages();
+  if (panelKey === "register") loadPackagesForRegister();
+  if (panelKey === "queued") renderQueuedList();
+  if (panelKey === "request") openRequestPage();
+  if (panelKey === "lot-history") {
+    document.getElementById("lh-search").value = "";
+    document.getElementById("lh-detail").style.display = "none";
+    document.getElementById("btn-export-excel").style.display = "none";
+    renderStockHistoryList();
+  }
+}
+
 document.querySelectorAll(".sidebar-item[data-panel]").forEach(item => {
   item.addEventListener("click", () => {
     if (item.classList.contains("admin-only") && !isAdmin()) return;
-    document.querySelectorAll(".sidebar-item").forEach(i => i.classList.remove("active"));
-    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-    item.classList.add("active");
-    document.getElementById(`panel-${item.dataset.panel}`).classList.add("active");
-    if (item.dataset.panel === "update-packages") loadUpdatePackages();
-    if (item.dataset.panel === "register") loadPackagesForRegister();
-    if (item.dataset.panel === "queued") renderQueuedList();
-    if (item.dataset.panel === "lot-history") {
-      document.getElementById("lh-search").value = "";
-      document.getElementById("lh-detail").style.display = "none";
-      document.getElementById("btn-export-excel").style.display = "none";
-      renderStockHistoryList();
-    }
+    activatePanel(item.dataset.panel);
   });
 });
 
@@ -156,7 +162,7 @@ function renderBorrowedList() {
     if (status === "returned" || status === "rejected") return false;
     if (deptFilter && r.department !== deptFilter) return false;
     if (search) {
-      const hay = `${r.request_number} ${r.handler_no} ${r.lot_number} ${r.technician_name} ${r.jig_tool_name}`.toLowerCase();
+      const hay = `${r.request_number} ${r.handler_no} ${r.technician_name} ${r.jig_tool_name}`.toLowerCase();
       if (!hay.includes(search)) return false;
     }
     return true;
@@ -173,8 +179,7 @@ function renderBorrowedList() {
     tr.innerHTML = `
       <td>${thumbHtml(r)}</td>
       <td><span class="reqno" data-id="${r.borrow_id}" style="cursor:pointer;">${r.request_number}</span></td>
-      <td><span class="lot-tag" data-lot="${r.lot_number}" style="cursor:pointer;">${r.lot_number}</span></td>
-      <td>${r.jig_tool_name}</td>
+      <td><span class="lot-tag" data-lot="${r.lot_number}" style="cursor:pointer;">${r.jig_tool_name}</span></td>
       <td>${r.department}</td>
       <td>${r.rack_location}</td>
       <td>${r.handler_no}</td>
@@ -232,7 +237,6 @@ function renderQueuedSection(dept, tbodyId, emptyId, headerId) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><span class="reqno">${r.request_number}</span></td>
-      <td><span class="lot-tag">${r.lot_number}</span></td>
       <td>${r.jig_tool_name}</td>
       <td>${r.handler_no}</td>
       <td>${r.technician_name}</td>
@@ -286,11 +290,17 @@ document.getElementById("btn-do-login").addEventListener("click", async () => {
 // =====================================================
 // REQUEST POPUP
 // =====================================================
-document.getElementById("btn-open-request").addEventListener("click", async () => {
-  await loadAllLots();
+document.getElementById("btn-open-request").addEventListener("click", () => activatePanel("request"));
+
+function openRequestPage() {
   clearRequestForm();
-  openPopup("modal-request");
-});
+  // Refresh lot/qty data in the background so the page shows instantly instead of
+  // waiting on a network round-trip before it can even render.
+  loadAllLots().then(() => {
+    const dept = document.getElementById("req-dept").value;
+    if (dept) document.getElementById("req-dept").dispatchEvent(new Event("change"));
+  });
+}
 
 function renderJigLotPicker(lots) {
   const list = document.getElementById("req-lot-list");
@@ -308,7 +318,7 @@ function renderJigLotPicker(lots) {
         ${thumb}
         <div class="jig-picker-row-text">
           <div class="jig-picker-row-name">${l.jig_tool_name}</div>
-          <div class="jig-picker-row-meta">${l.lot_number} · Avail: ${l.current_qty}</div>
+          <div class="jig-picker-row-meta">${l.rack_location} · Avail: ${l.current_qty}</div>
         </div>
       </div>
     `;
@@ -357,7 +367,7 @@ function selectJigLot(lotId) {
   toggle.querySelector(".jig-picker-toggle-thumb").outerHTML = url
     ? `<img class="jig-picker-toggle-thumb jig-thumb" src="${url}" alt="${lot.jig_tool_name}" />`
     : `<span class="jig-picker-toggle-thumb jig-thumb-placeholder">&#128736;&#65039;</span>`;
-  toggle.querySelector(".jig-picker-toggle-label").textContent = `${lot.jig_tool_name} — ${lot.lot_number}`;
+  toggle.querySelector(".jig-picker-toggle-label").textContent = lot.jig_tool_name;
 
   document.getElementById("req-location").value = lot.rack_location;
   document.getElementById("req-available").value = lot.current_qty;
@@ -399,7 +409,7 @@ document.getElementById("btn-submit-request").addEventListener("click", async ()
       lot_id: lotId, technician_id: techId, purpose, handler_no: handler, requested_qty: qty,
     });
     showMsg(msg, `${result.request_number} submitted — pending admin approval.`, "success");
-    setTimeout(() => { closePopup("modal-request"); clearRequestForm(); refreshAll(); }, 1200);
+    setTimeout(() => { activatePanel("main"); clearRequestForm(); refreshAll(); }, 1200);
   } catch (err) {
     showMsg(msg, err.message, "error");
   }
@@ -430,7 +440,7 @@ function clearRequestForm() {
 // =====================================================
 function openReturnPopup(record) {
   currentReturnRecord = record;
-  document.getElementById("return-title").textContent = `Return: ${record.jig_tool_name} — ${record.lot_number}`;
+  document.getElementById("return-title").textContent = `Return: ${record.jig_tool_name}`;
   document.getElementById("return-subtitle").textContent = `${record.request_number} · ${record.handler_no}`;
   document.getElementById("return-borrower-info").innerHTML =
     `<strong>Borrowed by:</strong> ${record.technician_name} &nbsp;·&nbsp; <strong>Qty to return:</strong> ${record.requested_qty} unit(s)`;
@@ -480,8 +490,8 @@ function openApprovePopup(borrowId) {
       <div><label>Request No</label><input value="${r.request_number}" readonly /></div>
       <div><label>Handler No</label><input value="${r.handler_no}" readonly /></div>
     </div>
-    <label>Jig / Tool / Lot</label>
-    <input value="${r.jig_tool_name} — ${r.lot_number}" readonly />
+    <label>Jig / Tool</label>
+    <input value="${r.jig_tool_name}" readonly />
     <div class="form-row">
       <div><label>Dept</label><input value="${r.department}" readonly /></div>
       <div><label>Rack</label><input value="${r.rack_location}" readonly /></div>
@@ -527,16 +537,14 @@ function openReqDetail(borrowId) {
   if (!r) return;
   const status = getDisplayStatus(r);
   document.getElementById("reqd-title").textContent = `${r.request_number} — Details`;
-  document.getElementById("reqd-subtitle").textContent = `${r.jig_tool_name} · ${r.lot_number} · ${status}`;
+  document.getElementById("reqd-subtitle").textContent = `${r.jig_tool_name} · ${status}`;
   document.getElementById("reqd-body").innerHTML = `
     <div class="form-row">
       <div><label>Request No</label><input value="${r.request_number}" readonly /></div>
       <div><label>Status</label><input value="${status}" readonly /></div>
     </div>
-    <div class="form-row">
-      <div><label>Lot No</label><input value="${r.lot_number}" readonly /></div>
-      <div><label>Jig / Tool</label><input value="${r.jig_tool_name}" readonly /></div>
-    </div>
+    <label>Jig / Tool</label>
+    <input value="${r.jig_tool_name}" readonly />
     <div class="form-row">
       <div><label>Dept</label><input value="${r.department}" readonly /></div>
       <div><label>Rack</label><input value="${r.rack_location}" readonly /></div>
@@ -680,7 +688,7 @@ function renderUpdateTable(rows, tbodyId, emptyId) {
       <td>${r.current_qty}</td>
       <td>
         <button class="btn-edit-row" data-lotid="${r.lot_id}">Edit</button>
-        <button class="btn-delete-row" data-lotid="${r.lot_id}" data-lotno="${r.lot_number}">Delete</button>
+        <button class="btn-delete-row" data-lotid="${r.lot_id}" data-name="${r.jig_tool_name}">Delete</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -695,15 +703,14 @@ function renderUpdateTable(rows, tbodyId, emptyId) {
     });
   });
   tbody.querySelectorAll(".btn-delete-row").forEach(btn => {
-    btn.addEventListener("click", () => deleteLot(Number(btn.dataset.lotid), btn.dataset.lotno));
+    btn.addEventListener("click", () => deleteLot(Number(btn.dataset.lotid), btn.dataset.name));
   });
 }
 
 function openUpdateLot(lot) {
   currentUpdateLot = lot;
   document.getElementById("ul-title").textContent = "Update Details";
-  document.getElementById("ul-subtitle").textContent = `${lot.jig_tool_name} — ${lot.lot_number}`;
-  document.getElementById("ul-lot-number").value = lot.lot_number;
+  document.getElementById("ul-subtitle").textContent = lot.jig_tool_name;
   document.getElementById("ul-current-qty").value = lot.current_qty;
   document.getElementById("ul-new-qty").value = "";
   document.getElementById("ul-location").value = lot.rack_location;
@@ -717,22 +724,20 @@ document.getElementById("btn-save-lot-update").addEventListener("click", async (
   hideMsg(msg);
   const newQtyStr = document.getElementById("ul-new-qty").value;
   const newLocation = document.getElementById("ul-location").value.trim();
-  const newLotNumber = document.getElementById("ul-lot-number").value.trim();
   const reason = document.getElementById("ul-reason").value;
   const payload = { reason, admin_username: adminSession.username };
   if (newQtyStr !== "") payload.new_qty = Number(newQtyStr);
   if (newLocation && newLocation !== currentUpdateLot.rack_location) payload.rack_location = newLocation;
-  if (newLotNumber && newLotNumber !== currentUpdateLot.lot_number) payload.lot_number = newLotNumber;
   try {
     await apiPatch(`/api/lots/${currentUpdateLot.lot_id}`, payload);
-    showMsg(msg, "Lot updated.", "success");
+    showMsg(msg, "Updated.", "success");
     setTimeout(() => { closePopup("modal-update-lot"); loadUpdatePackages(); refreshAll(); }, 800);
   } catch (err) { showMsg(msg, err.message, "error"); }
 });
 
-async function deleteLot(lotId, lotNumber) {
+async function deleteLot(lotId, name) {
   if (!isAdmin()) return;
-  if (!confirm(`Delete lot ${lotNumber}? This cannot be undone.`)) return;
+  if (!confirm(`Delete '${name}'? This cannot be undone.`)) return;
   try {
     await apiDelete(`/api/lots/${lotId}?admin_username=${encodeURIComponent(adminSession.username)}`);
     loadUpdatePackages();
@@ -812,14 +817,13 @@ document.getElementById("lot-form").addEventListener("submit", async (e) => {
   const msg = document.getElementById("lot-msg");
   const payload = {
     jig_tool_id: Number(document.getElementById("lot-package").value),
-    lot_number: document.getElementById("lot-number").value.trim(),
     rack_location: document.getElementById("lot-location").value.trim(),
     initial_qty: Number(document.getElementById("lot-qty").value),
   };
   if (!payload.jig_tool_id) { showMsg(msg, "Please select a jig / tool.", "error"); return; }
   try {
     const lot = await apiPost("/api/lots", payload);
-    showMsg(msg, `Lot ${lot.lot_number} registered.`, "success");
+    showMsg(msg, `${lot.jig_tool_name} added to stock.`, "success");
     e.target.reset();
     loadAllLots();
     loadPackagesForRegister();
