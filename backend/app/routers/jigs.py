@@ -118,12 +118,23 @@ def _parse_qty(raw) -> Optional[int]:
 _HEADER_ALIASES = {
     "description": "description",
     "binlocation": "rack_location",
+    "location": "rack_location",
+    "rack": "rack_location",
+    "rackblocation": "rack_location",
     "stockinhand": "qty",
+    "qty": "qty",
+    "quantity": "qty",
+    "stockqty": "qty",
+    "qtyinhand": "qty",
+    "availableqty": "qty",
     "parttype": "item_type",
+    "type": "item_type",
     "process": "process",
     "machine": "machine",
     "oempartnumber": "code",
+    "partnumber": "code",
     "department": "department",
+    "dept": "department",
 }
 
 
