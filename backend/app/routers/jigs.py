@@ -258,12 +258,21 @@ def _read_rows(filename: str, data: bytes):
     if "description" not in field_by_col.values():
         raise HTTPException(status_code=400, detail="Could not find a 'Description' column in the spreadsheet.")
 
+    # No quantity column at all (e.g. a sheet that's just Description + Picture) is
+    # a structural difference, not a per-row data problem — default every row to 1
+    # instead of flagging all of them as errors. A sheet that DOES have a quantity
+    # column but leaves a specific cell blank/invalid still gets flagged per-row,
+    # since that's actually missing data worth fixing at the source.
+    has_qty_column = "qty" in field_by_col.values()
+
     records = []
     embedded_by_record_idx = {}
     for row_idx, row in enumerate(rows[1:], start=1):
         record = {}
         for idx, field in field_by_col.items():
             record[field] = row[idx] if idx < len(row) else None
+        if not has_qty_column:
+            record["qty"] = 1
         if record.get("description"):
             if row_idx in embedded_by_row:
                 embedded_by_record_idx[len(records)] = embedded_by_row[row_idx]
