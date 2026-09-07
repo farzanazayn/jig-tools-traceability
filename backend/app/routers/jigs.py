@@ -5,6 +5,7 @@ from typing import Optional
 import io
 import re
 import csv
+import zipfile
 import mimetypes
 import traceback
 import openpyxl
@@ -133,7 +134,8 @@ _IMAGE_FORMAT_MIME = {
 
 
 def _extract_embedded_images(ws) -> dict:
-    """Maps 0-indexed sheet row -> (bytes, mime) for images embedded/anchored in the sheet.
+    """Maps 0-indexed sheet row -> (bytes, mime) for images that are floating/anchored
+    over a cell (the classic Insert > Pictures method) via openpyxl's drawing API.
     If a row has more than one image anchored, the first one wins."""
     result = {}
     for img in getattr(ws, "_images", []):
@@ -151,6 +153,40 @@ def _extract_embedded_images(ws) -> dict:
     return result
 
 
+def _extract_media_files_from_zip(data: bytes) -> list:
+    """Fallback for Excel's newer 'Place in Cell' picture type (Insert > Pictures >
+    Place in Cell), which is stored as a rich-value cell reference rather than a
+    floating/anchored drawing — openpyxl's image API (_extract_embedded_images
+    above) cannot see these at all. An xlsx is just a zip file, so this pulls every
+    image straight out of its media folder, in Excel's own internal numeric order
+    (image1.png, image2.png, ...), without needing to understand the rich-value
+    XML linkage. Whether that order can be trusted to match row order is decided
+    by the caller."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            media_names = [n for n in z.namelist() if n.startswith("xl/media/")]
+
+            def _sort_key(name):
+                m = re.search(r"(\d+)", name.rsplit("/", 1)[-1])
+                return int(m.group(1)) if m else 0
+
+            media_names.sort(key=_sort_key)
+            out = []
+            for name in media_names:
+                try:
+                    raw = z.read(name)
+                    if len(raw) > MAX_IMAGE_BYTES:
+                        continue
+                    ext = name.rsplit(".", 1)[-1].lower()
+                    mime = _IMAGE_FORMAT_MIME.get(ext) or mimetypes.guess_type(name)[0] or "image/png"
+                    out.append((raw, mime))
+                except Exception:
+                    continue
+            return out
+    except Exception:
+        return []
+
+
 def _read_rows(filename: str, data: bytes):
     """Returns (records, embedded_images) — records is a list of normalized-field dicts,
     embedded_images maps the record's list index -> (bytes, mime) for any picture embedded
@@ -164,8 +200,37 @@ def _read_rows(filename: str, data: bytes):
     elif lower.endswith(".xlsx") or lower.endswith(".xlsm"):
         wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
         ws = wb.worksheets[0]
-        rows = [list(r) for r in ws.iter_rows(values_only=True)]
-        embedded_by_row = _extract_embedded_images(ws)
+        # Read cell-by-cell rather than via values_only=True in one shot: a cell
+        # using Excel's newer "Place in Cell" picture type isn't a normal value,
+        # and openpyxl can throw trying to resolve it — one bad cell shouldn't
+        # sink the whole import, so treat it as blank instead.
+        rows = []
+        for sheet_row in ws.iter_rows():
+            row_values = []
+            for cell in sheet_row:
+                try:
+                    row_values.append(cell.value)
+                except Exception:
+                    row_values.append(None)
+            rows.append(row_values)
+        try:
+            embedded_by_row = _extract_embedded_images(ws)
+        except Exception:
+            embedded_by_row = {}
+
+        if not embedded_by_row:
+            # No floating/anchored pictures found — this sheet may be using Excel's
+            # newer "Place in Cell" picture type instead, which openpyxl can't read
+            # via the drawing API at all. Fall back to pulling images straight out
+            # of the xlsx's media folder. This only tells us the images exist and
+            # their internal order, not which row each belongs to — so only trust
+            # a positional (top-to-bottom) match when the count lines up exactly
+            # with the number of data rows. Otherwise, guessing risks attaching the
+            # wrong picture to the wrong item, which is worse than attaching none.
+            media = _extract_media_files_from_zip(data)
+            data_row_count = max(len(rows) - 1, 0)
+            if media and len(media) == data_row_count:
+                embedded_by_row = {i + 1: media[i] for i in range(len(media))}
     else:
         raise HTTPException(status_code=400, detail="Spreadsheet must be .xlsx or .csv")
 
