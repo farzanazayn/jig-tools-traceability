@@ -38,8 +38,35 @@ def _lot_to_out(lot: models.JigToolLot) -> schemas.LotOut:
 
 @router.get("", response_model=list[schemas.LotOut])
 def list_lots(db: Session = Depends(get_db)):
-    lots = db.query(models.JigToolLot).order_by(models.JigToolLot.lot_id).all()
-    return [_lot_to_out(lot) for lot in lots]
+    # Select has_image as "image_data IS NOT NULL" computed in Postgres, instead of
+    # loading every jig/tool's full picture (can be several MB each) just to check
+    # whether one exists — this is what made the list slow to load.
+    rows = (
+        db.query(
+            models.JigToolLot,
+            models.JigTool.jig_tool_name,
+            models.JigTool.item_type,
+            models.JigTool.image_data.isnot(None).label("has_image"),
+        )
+        .join(models.JigTool, models.JigToolLot.jig_tool_id == models.JigTool.jig_tool_id)
+        .order_by(models.JigToolLot.lot_id)
+        .all()
+    )
+    return [
+        schemas.LotOut(
+            lot_id=lot.lot_id,
+            lot_number=lot.lot_number,
+            jig_tool_id=lot.jig_tool_id,
+            jig_tool_name=jig_tool_name,
+            item_type=item_type,
+            department=lot.department,
+            rack_location=lot.rack_location,
+            initial_qty=lot.initial_qty,
+            current_qty=lot.current_qty,
+            has_image=has_image,
+        )
+        for lot, jig_tool_name, item_type, has_image in rows
+    ]
 
 
 @router.post("", response_model=schemas.LotOut)
@@ -179,12 +206,18 @@ def get_lot_history(lot_id: int, db: Session = Depends(get_db)):
             models.JigLotHistory.lot_id == lot_id
         ).order_by(models.JigLotHistory.created_at.desc()).all()
 
+        technician_ids = {h.technician_id for h in history if h.technician_id}
+        tech_names = {}
+        if technician_ids:
+            tech_names = dict(
+                db.query(models.Technician.technician_id, models.Technician.technician_name)
+                .filter(models.Technician.technician_id.in_(technician_ids))
+                .all()
+            )
+
         result = []
         for h in history:
-            tech_name = None
-            if h.technician_id:
-                tech = db.get(models.Technician, h.technician_id)
-                tech_name = tech.technician_name if tech else h.technician_id
+            tech_name = tech_names.get(h.technician_id, h.technician_id) if h.technician_id else None
 
             result.append(schemas.LotHistoryOut(
                 history_id=h.history_id,

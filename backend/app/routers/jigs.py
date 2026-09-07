@@ -34,10 +34,24 @@ def _to_out(j: models.JigTool) -> schemas.JigToolOut:
 
 @router.get("", response_model=list[schemas.JigToolOut])
 def list_jigs(db: Session = Depends(get_db)):
-    items = db.query(models.JigTool).order_by(
-        models.JigTool.department, models.JigTool.jig_tool_name
-    ).all()
-    return [_to_out(j) for j in items]
+    # Compute has_image as "image_data IS NOT NULL" in Postgres rather than loading
+    # every picture (can be several MB each) just to check whether one exists.
+    rows = (
+        db.query(
+            models.JigTool.jig_tool_id,
+            models.JigTool.jig_tool_name,
+            models.JigTool.item_type,
+            models.JigTool.department,
+            models.JigTool.process,
+            models.JigTool.machine,
+            models.JigTool.default_location,
+            models.JigTool.default_qty,
+            models.JigTool.image_data.isnot(None).label("has_image"),
+        )
+        .order_by(models.JigTool.department, models.JigTool.jig_tool_name)
+        .all()
+    )
+    return [schemas.JigToolOut(**row._mapping) for row in rows]
 
 
 @router.post("", response_model=schemas.JigToolOut)
@@ -222,96 +236,114 @@ async def bulk_import_jigs(
     errors = []
     pictures_matched = 0
 
+    # Preload everything the loop needs to check, in bulk, instead of running 2+
+    # queries per spreadsheet row (which meant ~200+ network round trips to a
+    # remote DB for a ~100-row sheet). The loop below only touches these in-memory
+    # structures; nothing hits the DB until the single commit at the end.
+    row_departments = {
+        str(r.get("department") or "").strip() or department for r in records
+    }
+    existing_jigs = {
+        (j.jig_tool_name, j.department): j
+        for j in db.query(models.JigTool).filter(models.JigTool.department.in_(row_departments)).all()
+    }
+    existing_lot_numbers = {ln for (ln,) in db.query(models.JigToolLot.lot_number).all()}
+
     for record_idx, record in enumerate(records):
         name = str(record.get("description") or "").strip()
         if not name:
             continue
-        try:
-            qty = _parse_qty(record.get("qty"))
-            if qty is None:
-                errors.append(f"{name}: could not read a quantity from '{record.get('qty')}'")
-                continue
 
-            item_type = str(record.get("item_type") or "Jig").strip()
-            if item_type not in ("Jig", "Tool"):
-                item_type = "Jig"
+        qty = _parse_qty(record.get("qty"))
+        if qty is None:
+            errors.append(f"{name}: could not read a quantity from '{record.get('qty')}'")
+            continue
 
-            row_department = str(record.get("department") or "").strip() or department
-            process = (str(record.get("process")).strip() if record.get("process") else None) or None
-            machine = (str(record.get("machine")).strip() if record.get("machine") else None) or None
-            rack_location = str(record.get("rack_location") or "").strip()
-            code = str(record.get("code") or "").strip()
+        item_type = str(record.get("item_type") or "Jig").strip()
+        if item_type not in ("Jig", "Tool"):
+            item_type = "Jig"
 
-            image_data = image_mime = None
-            match = image_by_key.get(_normalize(name)) or embedded_images.get(record_idx)
-            if match:
-                image_data, image_mime = match
+        row_department = str(record.get("department") or "").strip() or department
+        process = (str(record.get("process")).strip() if record.get("process") else None) or None
+        machine = (str(record.get("machine")).strip() if record.get("machine") else None) or None
+        rack_location = str(record.get("rack_location") or "").strip()
+        code = str(record.get("code") or "").strip()
 
-            existing_jig = db.query(models.JigTool).filter(
-                models.JigTool.jig_tool_name == name,
-                models.JigTool.department == row_department,
-            ).first()
-            if existing_jig:
-                if match and not existing_jig.image_data:
-                    existing_jig.image_data = image_data
-                    existing_jig.image_mime = image_mime
-                    db.commit()
-                    pictures_matched += 1
-                    skipped.append(f"{name}: already existed — picture added")
-                else:
-                    skipped.append(f"{name}: a jig/tool with this name already exists in {row_department}")
-                continue
+        image_data = image_mime = None
+        match = image_by_key.get(_normalize(name)) or embedded_images.get(record_idx)
+        if match:
+            image_data, image_mime = match
 
-            lot_number = code if code else _normalize(name)[:45].upper() or f"IMPORT-{len(created)+1}"
-            if db.query(models.JigToolLot).filter(models.JigToolLot.lot_number == lot_number).first():
-                skipped.append(f"{name}: lot number '{lot_number}' already exists")
-                continue
-
-            if match:
+        existing_jig = existing_jigs.get((name, row_department))
+        if existing_jig:
+            if match and not existing_jig.image_data:
+                existing_jig.image_data = image_data
+                existing_jig.image_mime = image_mime
                 pictures_matched += 1
+                skipped.append(f"{name}: already existed — picture added")
+            else:
+                skipped.append(f"{name}: a jig/tool with this name already exists in {row_department}")
+            continue
 
-            jig_tool = models.JigTool(
-                jig_tool_name=name,
-                item_type=item_type,
-                department=row_department,
-                process=process,
-                machine=machine,
-                default_location=rack_location,
-                default_qty=qty,
-                image_data=image_data,
-                image_mime=image_mime,
-            )
-            db.add(jig_tool)
-            db.flush()
+        lot_number = code if code else _normalize(name)[:45].upper() or f"IMPORT-{len(created)+1}"
+        if lot_number in existing_lot_numbers:
+            skipped.append(f"{name}: lot number '{lot_number}' already exists")
+            continue
 
-            lot = models.JigToolLot(
-                lot_number=lot_number,
-                jig_tool_id=jig_tool.jig_tool_id,
-                department=row_department,
-                rack_location=rack_location,
-                initial_qty=qty,
-                current_qty=qty,
-            )
-            db.add(lot)
-            db.flush()
+        if match:
+            pictures_matched += 1
 
-            history = models.JigLotHistory(
-                lot_id=lot.lot_id,
-                action_type="REGISTERED",
-                qty_before=0,
-                qty_after=qty,
-                qty_change=qty,
-                reason="Bulk import",
-                admin_username=admin_username,
-                notes=f"Imported from {file.filename}",
-            )
-            db.add(history)
-            db.commit()
+        # Each row gets its own SAVEPOINT: if something fails mid-row (a flush
+        # error, say), only this row's changes roll back — everything already
+        # processed earlier in the batch is untouched and still gets committed
+        # for real in the single db.commit() after the loop.
+        try:
+            with db.begin_nested():
+                jig_tool = models.JigTool(
+                    jig_tool_name=name,
+                    item_type=item_type,
+                    department=row_department,
+                    process=process,
+                    machine=machine,
+                    default_location=rack_location,
+                    default_qty=qty,
+                    image_data=image_data,
+                    image_mime=image_mime,
+                )
+                db.add(jig_tool)
+                db.flush()
+
+                lot = models.JigToolLot(
+                    lot_number=lot_number,
+                    jig_tool_id=jig_tool.jig_tool_id,
+                    department=row_department,
+                    rack_location=rack_location,
+                    initial_qty=qty,
+                    current_qty=qty,
+                )
+                db.add(lot)
+                db.flush()
+
+                history = models.JigLotHistory(
+                    lot_id=lot.lot_id,
+                    action_type="REGISTERED",
+                    qty_before=0,
+                    qty_after=qty,
+                    qty_change=qty,
+                    reason="Bulk import",
+                    admin_username=admin_username,
+                    notes=f"Imported from {file.filename}",
+                )
+                db.add(history)
+
+            existing_jigs[(name, row_department)] = jig_tool
+            existing_lot_numbers.add(lot_number)
             created.append(name)
 
         except Exception as e:
-            db.rollback()
             errors.append(f"{name}: {e}")
+
+    db.commit()
 
     return {
         "created_count": len(created),

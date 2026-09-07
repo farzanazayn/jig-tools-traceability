@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from datetime import datetime
 import traceback
@@ -32,7 +32,15 @@ def _request_to_out(b: models.BorrowRecord) -> schemas.RequestOut:
 
 @router.get("", response_model=list[schemas.RequestOut])
 def list_requests(status: Optional[str] = Query(None), db: Session = Depends(get_db)):
-    q = db.query(models.BorrowRecord)
+    # Eager-load lot/jig_tool/technician in one query instead of one extra query per
+    # record per relationship — but skip the jig_tool's image bytes, which aren't
+    # needed here and can be several MB each.
+    q = db.query(models.BorrowRecord).options(
+        joinedload(models.BorrowRecord.lot).joinedload(models.JigToolLot.jig_tool).load_only(
+            models.JigTool.jig_tool_name, models.JigTool.item_type
+        ),
+        joinedload(models.BorrowRecord.technician),
+    )
     if status:
         q = q.filter(models.BorrowRecord.status == status)
     records = q.order_by(models.BorrowRecord.borrow_datetime.desc()).all()
