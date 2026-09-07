@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from .database import Base, engine, init_schema
-from .routers import technicians, jigs, jig_lots, borrow, dashboard, auth
+from .routers import technicians, jigs, jig_lots, borrow, auth
 
 init_schema()
 Base.metadata.create_all(bind=engine)
@@ -23,7 +23,6 @@ app.include_router(technicians.router)
 app.include_router(jigs.router)
 app.include_router(jig_lots.router)
 app.include_router(borrow.router)
-app.include_router(dashboard.router)
 
 frontend_path = Path("frontend")
 if frontend_path.is_dir():

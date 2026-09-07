@@ -26,7 +26,7 @@
   <div class="sidebar">
     <div class="sidebar-item active" data-panel="main">&#127968; Main Dashboard</div>
     <div class="sidebar-item" data-panel="queued">&#128203; Queued List <span class="tab-count" id="pending-count" style="margin-left:auto;">0</span></div>
-    <div class="sidebar-item" data-panel="lot-history">&#128230; Lot History</div>
+    <div class="sidebar-item" data-panel="lot-history">&#128230; Stock History</div>
     <div class="sidebar-item" data-panel="help">&#10067; Help</div>
     <div class="sidebar-divider"></div>
     <div class="sidebar-label admin-only">Admin</div>
@@ -128,34 +128,50 @@
       </div>
     </div>
 
-    <!-- ======== PANEL: LOT HISTORY ======== -->
+    <!-- ======== PANEL: STOCK HISTORY ======== -->
     <div class="panel" id="panel-lot-history">
       <div class="section-header">
-        <div class="section-title">Lot History</div>
+        <div class="section-title">Stock History</div>
         <button class="btn-export" id="btn-export-excel" style="display:none;">&#128194; Export CSV</button>
       </div>
 
-      <div class="search-combo">
-        <input type="text" id="lh-search" placeholder="Search by jig/tool name (e.g. Test Handler Jig)..." />
-        <input type="text" id="lh-rack" placeholder="Or by rack location (e.g. A1)..." />
-        <button class="btn" style="margin-top:0;" id="btn-lh-search">Search</button>
+      <div class="search-row">
+        <input type="text" id="lh-search" placeholder="Filter by jig/tool name or rack location..." />
       </div>
 
-      <div id="lh-results" style="display:none;">
-        <div class="card" style="margin-bottom:14px;">
-          <div class="card-title">Matching Jigs/Tools — click View History to load log</div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Lot No</th><th>Jig / Tool</th><th>Dept</th><th>Rack</th><th>Current Qty</th><th></th></tr>
-              </thead>
-              <tbody id="lh-search-tbody"></tbody>
-            </table>
+      <div id="lh-list">
+        <div class="dept-section">
+          <div class="dept-header">Test 2</div>
+          <div class="card" style="border-radius:0 0 8px 8px; margin-bottom:0;">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th></tr>
+                </thead>
+                <tbody id="lh-t2-tbody"></tbody>
+              </table>
+              <div class="empty" id="lh-t2-empty" style="display:none;">No Test 2 items.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dept-section" style="margin-top:24px;">
+          <div class="dept-header">Test 1</div>
+          <div class="card" style="border-radius:0 0 8px 8px; margin-bottom:0;">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th></tr>
+                </thead>
+                <tbody id="lh-t1-tbody"></tbody>
+              </table>
+              <div class="empty" id="lh-t1-empty" style="display:none;">No Test 1 items.</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div id="lh-detail" style="display:none;">
+      <div id="lh-detail" style="display:none; margin-top:24px;">
         <div class="lot-summary" id="lh-summary-boxes"></div>
         <div class="card">
           <div class="card-title" id="lh-detail-title">Transaction Log</div>
@@ -231,7 +247,7 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th></th><th>Lot No</th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th><th>Action</th></tr>
+                <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th><th>Action</th></tr>
               </thead>
               <tbody id="pkg-t2-tbody"></tbody>
             </table>
@@ -246,7 +262,7 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th></th><th>Lot No</th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th><th>Action</th></tr>
+                <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th><th>Action</th></tr>
               </thead>
               <tbody id="pkg-t1-tbody"></tbody>
             </table>

@@ -64,6 +64,12 @@ document.querySelectorAll(".sidebar-item[data-panel]").forEach(item => {
     if (item.dataset.panel === "update-packages") loadUpdatePackages();
     if (item.dataset.panel === "register") loadPackagesForRegister();
     if (item.dataset.panel === "queued") renderQueuedList();
+    if (item.dataset.panel === "lot-history") {
+      document.getElementById("lh-search").value = "";
+      document.getElementById("lh-detail").style.display = "none";
+      document.getElementById("btn-export-excel").style.display = "none";
+      renderStockHistoryList();
+    }
   });
 });
 
@@ -550,60 +556,47 @@ function openReqDetail(borrowId) {
 }
 
 // =====================================================
-// LOT HISTORY PANEL
+// STOCK HISTORY PANEL
 // =====================================================
 async function openLotHistoryPanel(lotNumber) {
   document.querySelectorAll(".sidebar-item").forEach(i => i.classList.remove("active"));
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   document.querySelector('.sidebar-item[data-panel="lot-history"]').classList.add("active");
   document.getElementById("panel-lot-history").classList.add("active");
-  document.getElementById("lh-search").value = lotNumber;
-  document.getElementById("lh-rack").value = "";
-  await searchLotHistory();
+  document.getElementById("lh-search").value = "";
+  renderStockHistoryList();
   const lot = allLots.find(l => l.lot_number === lotNumber);
   if (lot) await viewLotHistory(lot.lot_id, lotNumber);
 }
 
-document.getElementById("btn-lh-search").addEventListener("click", searchLotHistory);
-document.getElementById("lh-search").addEventListener("keydown", e => { if (e.key === "Enter") searchLotHistory(); });
-document.getElementById("lh-rack").addEventListener("keydown", e => { if (e.key === "Enter") searchLotHistory(); });
+document.getElementById("lh-search").addEventListener("input", renderStockHistoryList);
 
-async function searchLotHistory() {
-  const search = document.getElementById("lh-search").value.trim();
-  const rack = document.getElementById("lh-rack").value.trim();
-  if (!search && !rack) return;
-  try {
-    const params = new URLSearchParams();
-    if (search) params.append("search", search);
-    if (rack) params.append("rack_location", rack);
-    const results = await apiGet(`/api/dashboard/lot-history?${params}`);
-    const tbody = document.getElementById("lh-search-tbody");
-    const resultsDiv = document.getElementById("lh-results");
-    const detailDiv = document.getElementById("lh-detail");
-    detailDiv.style.display = "none";
-    document.getElementById("btn-export-excel").style.display = "none";
-    resultsDiv.style.display = "block";
-    if (results.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="empty">No matching jigs/tools found.</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = "";
-    for (const lot of results) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><span class="lot-tag">${lot.lot_number}</span></td>
-        <td>${lot.jig_tool_name}</td>
-        <td>${lot.department}</td>
-        <td>${lot.rack_location}</td>
-        <td>${lot.current_qty}</td>
-        <td><button class="btn btn-sm" data-lotid="${lot.lot_id}" data-lotno="${lot.lot_number}">View History</button></td>
-      `;
-      tbody.appendChild(tr);
-    }
-    tbody.querySelectorAll("button[data-lotid]").forEach(btn => {
-      btn.addEventListener("click", () => viewLotHistory(Number(btn.dataset.lotid), btn.dataset.lotno));
-    });
-  } catch (err) { console.error("searchLotHistory:", err); }
+function renderStockHistoryList() {
+  const filter = document.getElementById("lh-search").value.trim().toLowerCase();
+  const matches = (l) => !filter || `${l.jig_tool_name} ${l.rack_location}`.toLowerCase().includes(filter);
+  renderStockHistorySection(allLots.filter(l => l.department === "Test 2" && matches(l)), "lh-t2-tbody", "lh-t2-empty");
+  renderStockHistorySection(allLots.filter(l => l.department === "Test 1" && matches(l)), "lh-t1-tbody", "lh-t1-empty");
+}
+
+function renderStockHistorySection(rows, tbodyId, emptyId) {
+  const tbody = document.getElementById(tbodyId);
+  const empty = document.getElementById(emptyId);
+  tbody.innerHTML = "";
+  if (rows.length === 0) { empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  for (const lot of rows) {
+    const tr = document.createElement("tr");
+    tr.className = "lh-row";
+    tr.style.cursor = "pointer";
+    tr.innerHTML = `
+      <td>${thumbHtml(lot)}</td>
+      <td>${lot.jig_tool_name}</td>
+      <td>${lot.rack_location}</td>
+      <td>${lot.current_qty}</td>
+    `;
+    tr.addEventListener("click", () => viewLotHistory(lot.lot_id, lot.lot_number));
+    tbody.appendChild(tr);
+  }
 }
 
 async function viewLotHistory(lotId, lotNumber) {
@@ -682,8 +675,7 @@ function renderUpdateTable(rows, tbodyId, emptyId) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${thumbHtml(r)}</td>
-      <td><span class="lot-tag" data-lot="${r.lot_number}" style="cursor:pointer;">${r.lot_number}</span></td>
-      <td>${r.jig_tool_name}</td>
+      <td><span class="lot-tag" data-lot="${r.lot_number}" style="cursor:pointer;">${r.jig_tool_name}</span></td>
       <td>${r.rack_location}</td>
       <td>${r.current_qty}</td>
       <td>
