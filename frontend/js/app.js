@@ -68,6 +68,7 @@ function activatePanel(panelKey) {
     document.getElementById("lh-search").value = "";
     document.getElementById("lh-detail").style.display = "none";
     document.getElementById("btn-export-excel").style.display = "none";
+    setDeptSectionExpanded("t2");
     renderStockHistoryList();
   }
 }
@@ -572,12 +573,32 @@ async function openLotHistoryPanel(lotNumber) {
   document.querySelector('.sidebar-item[data-panel="lot-history"]').classList.add("active");
   document.getElementById("panel-lot-history").classList.add("active");
   document.getElementById("lh-search").value = "";
+  setDeptSectionExpanded("t2");
   renderStockHistoryList();
   const lot = allLots.find(l => l.lot_number === lotNumber);
   if (lot) await viewLotHistory(lot.lot_id, lotNumber);
 }
 
 document.getElementById("lh-search").addEventListener("input", renderStockHistoryList);
+
+// ── Accordion: only one of Test 2 / Test 1 open at a time ──
+let expandedDeptSection = "t2";
+
+function setDeptSectionExpanded(deptKey) {
+  expandedDeptSection = deptKey;
+  for (const key of ["t2", "t1"]) {
+    const isOpen = key === deptKey;
+    document.getElementById(`lh-${key}-section`).style.display = isOpen ? "" : "none";
+    document.getElementById(`lh-${key}-caret`).classList.toggle("collapsed", !isOpen);
+  }
+}
+
+document.querySelectorAll(".dept-header-toggle[data-dept-toggle]").forEach(header => {
+  header.addEventListener("click", () => {
+    const key = header.dataset.deptToggle;
+    setDeptSectionExpanded(expandedDeptSection === key ? null : key);
+  });
+});
 
 function renderStockHistoryList() {
   const filter = document.getElementById("lh-search").value.trim().toLowerCase();
@@ -623,6 +644,12 @@ async function viewLotHistory(lotId, lotNumber) {
     document.getElementById("lh-detail-title").textContent = `${lotNumber} — Transaction Log`;
     document.getElementById("lh-detail").style.display = "block";
     document.getElementById("btn-export-excel").style.display = "inline-flex";
+
+    // Collapse whichever list is open so the log isn't buried under a long item
+    // list, then scroll it into view — no manual scrolling needed to see it.
+    setDeptSectionExpanded(null);
+    document.getElementById("lh-detail").scrollIntoView({ behavior: "smooth", block: "start" });
+
     const tbody = document.getElementById("lh-log-tbody");
     const empty = document.getElementById("lh-log-empty");
     if (history.length === 0) { tbody.innerHTML = ""; empty.style.display = "block"; return; }

@@ -246,6 +246,23 @@ input, td, .stat-val, .lot-tag, .reqno, .dt {
   border-bottom: none;
 }
 
+.dept-header-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dept-toggle-caret {
+  font-size: 12px;
+  transition: transform 0.15s ease;
+}
+
+.dept-toggle-caret.collapsed {
+  transform: rotate(-90deg);
+}
+
 /* ── Cards ── */
 .card {
   background: var(--surface);
