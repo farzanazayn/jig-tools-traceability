@@ -1,4 +1,13 @@
-const API = window.location.pathname.startsWith("/jigtools") ? "/jigtools" : "";
+// Works out the app's own base path from wherever this script was actually
+// loaded from, instead of guessing a hardcoded prefix like "/jigtools" — that
+// broke when the app got deployed under a deeper nested path
+// (e.g. "/traceability/jigtools/") that doesn't literally start with "/jigtools".
+const API = (() => {
+  const src = document.currentScript && document.currentScript.src;
+  if (!src) return "";
+  const path = new URL(src).pathname;
+  return path.replace(/\/js\/api\.js.*$/, "");
+})();
 
 async function apiGet(path) {
   const res = await fetch(`${API}${path}`);
