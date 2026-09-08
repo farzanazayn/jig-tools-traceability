@@ -333,6 +333,12 @@ async def bulk_import_jigs(
         for j in db.query(models.JigTool).filter(models.JigTool.department.in_(row_departments)).all()
     }
     existing_lot_numbers = {ln for (ln,) in db.query(models.JigToolLot.lot_number).all()}
+    existing_lots_by_jig_tool_id = {
+        l.jig_tool_id: l
+        for l in db.query(models.JigToolLot).filter(
+            models.JigToolLot.jig_tool_id.in_([j.jig_tool_id for j in existing_jigs.values()])
+        ).all()
+    }
 
     for record_idx, record in enumerate(records):
         name = str(record.get("description") or "").strip()
@@ -361,11 +367,27 @@ async def bulk_import_jigs(
 
         existing_jig = existing_jigs.get((name, row_department))
         if existing_jig:
+            # Backfill only fields that are currently blank — never overwrite
+            # something an admin may have already set or corrected by hand, and
+            # never touch qty (that reflects live stock, not description data).
+            updated = []
             if match and not existing_jig.image_data:
                 existing_jig.image_data = image_data
                 existing_jig.image_mime = image_mime
                 pictures_matched += 1
-                skipped.append(f"{name}: already existed — picture added")
+                updated.append("picture")
+            if machine and not existing_jig.machine:
+                existing_jig.machine = machine
+                updated.append("machine")
+            if process and not existing_jig.process:
+                existing_jig.process = process
+                updated.append("process")
+            existing_lot = existing_lots_by_jig_tool_id.get(existing_jig.jig_tool_id)
+            if existing_lot and rack_location and not existing_lot.rack_location:
+                existing_lot.rack_location = rack_location
+                updated.append("location")
+            if updated:
+                skipped.append(f"{name}: already existed — updated {', '.join(updated)}")
             else:
                 skipped.append(f"{name}: a jig/tool with this name already exists in {row_department}")
             continue
