@@ -328,8 +328,13 @@ async def bulk_import_jigs(
     row_departments = {
         str(r.get("department") or "").strip() or department for r in records
     }
+    # Keyed case-insensitively: a prior manual UPPERCASE-normalization pass (or
+    # just inconsistent typing) means the sheet's name and the DB's stored name
+    # won't always match by exact case — an exact-match lookup here would treat
+    # "Charge Plate" and "CHARGE PLATE" as two different items and either miss
+    # the backfill or create a duplicate.
     existing_jigs = {
-        (j.jig_tool_name, j.department): j
+        (j.jig_tool_name.strip().upper(), j.department): j
         for j in db.query(models.JigTool).filter(models.JigTool.department.in_(row_departments)).all()
     }
     existing_lot_numbers = {ln for (ln,) in db.query(models.JigToolLot.lot_number).all()}
@@ -365,7 +370,7 @@ async def bulk_import_jigs(
         if match:
             image_data, image_mime = match
 
-        existing_jig = existing_jigs.get((name, row_department))
+        existing_jig = existing_jigs.get((name.strip().upper(), row_department))
         if existing_jig:
             # Backfill only fields that are currently blank — never overwrite
             # something an admin may have already set or corrected by hand, and
@@ -443,7 +448,7 @@ async def bulk_import_jigs(
                 )
                 db.add(history)
 
-            existing_jigs[(name, row_department)] = jig_tool
+            existing_jigs[(name.strip().upper(), row_department)] = jig_tool
             existing_lot_numbers.add(lot_number)
             created.append(name)
 
