@@ -29,6 +29,8 @@ def _lot_to_out(lot: models.JigToolLot) -> schemas.LotOut:
         jig_tool_name=lot.jig_tool.jig_tool_name,
         item_type=lot.jig_tool.item_type,
         department=lot.department,
+        process=lot.jig_tool.process,
+        machine=lot.jig_tool.machine,
         rack_location=lot.rack_location,
         initial_qty=lot.initial_qty,
         current_qty=lot.current_qty,
@@ -46,6 +48,8 @@ def list_lots(db: Session = Depends(get_db)):
             models.JigToolLot,
             models.JigTool.jig_tool_name,
             models.JigTool.item_type,
+            models.JigTool.process,
+            models.JigTool.machine,
             models.JigTool.image_data.isnot(None).label("has_image"),
         )
         .join(models.JigTool, models.JigToolLot.jig_tool_id == models.JigTool.jig_tool_id)
@@ -60,12 +64,14 @@ def list_lots(db: Session = Depends(get_db)):
             jig_tool_name=jig_tool_name,
             item_type=item_type,
             department=lot.department,
+            process=process,
+            machine=machine,
             rack_location=lot.rack_location,
             initial_qty=lot.initial_qty,
             current_qty=lot.current_qty,
             has_image=has_image,
         )
-        for lot, jig_tool_name, item_type, has_image in rows
+        for lot, jig_tool_name, item_type, process, machine, has_image in rows
     ]
 
 

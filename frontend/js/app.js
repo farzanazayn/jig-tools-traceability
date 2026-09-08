@@ -95,7 +95,20 @@ async function loadAllRequests() {
 async function loadAllLots() {
   try {
     allLots = await apiGet("/api/lots");
+    populateMachineFilterOptions();
   } catch (err) { console.error("loadAllLots:", err); }
+}
+
+function populateMachineFilterOptions() {
+  const machines = [...new Set(allLots.map(l => l.machine).filter(Boolean))].sort();
+  for (const selectId of ["lh-machine-filter", "pkg-machine-filter"]) {
+    const sel = document.getElementById(selectId);
+    if (!sel) continue;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All Machines</option>' +
+      machines.map(m => `<option value="${m}">${m}</option>`).join("");
+    if (machines.includes(current)) sel.value = current;
+  }
 }
 
 function refreshAll() {
@@ -600,9 +613,15 @@ document.querySelectorAll(".dept-header-toggle[data-dept-toggle]").forEach(heade
   });
 });
 
+document.getElementById("lh-machine-filter").addEventListener("change", renderStockHistoryList);
+
 function renderStockHistoryList() {
   const filter = document.getElementById("lh-search").value.trim().toLowerCase();
-  const matches = (l) => !filter || `${l.jig_tool_name} ${l.rack_location}`.toLowerCase().includes(filter);
+  const machineFilter = document.getElementById("lh-machine-filter").value;
+  const matches = (l) => {
+    if (machineFilter && l.machine !== machineFilter) return false;
+    return !filter || `${l.jig_tool_name} ${l.rack_location}`.toLowerCase().includes(filter);
+  };
   renderStockHistorySection(allLots.filter(l => l.department === "Test 2" && matches(l)), "lh-t2-tbody", "lh-t2-empty");
   renderStockHistorySection(allLots.filter(l => l.department === "Test 1" && matches(l)), "lh-t1-tbody", "lh-t1-empty");
 }
@@ -707,11 +726,16 @@ document.getElementById("btn-export-excel").addEventListener("click", () => {
 // =====================================================
 // UPDATE JIG/TOOL LIST (ADMIN)
 // =====================================================
+document.getElementById("pkg-machine-filter").addEventListener("change", loadUpdatePackages);
+
 async function loadUpdatePackages() {
   try {
     const data = await apiGet("/api/lots");
-    renderUpdateTable(data.filter(r => r.department === "Test 2"), "pkg-t2-tbody", "pkg-t2-empty");
-    renderUpdateTable(data.filter(r => r.department === "Test 1"), "pkg-t1-tbody", "pkg-t1-empty");
+    populateMachineFilterOptions();
+    const machineFilter = document.getElementById("pkg-machine-filter").value;
+    const matches = (r) => !machineFilter || r.machine === machineFilter;
+    renderUpdateTable(data.filter(r => r.department === "Test 2" && matches(r)), "pkg-t2-tbody", "pkg-t2-empty");
+    renderUpdateTable(data.filter(r => r.department === "Test 1" && matches(r)), "pkg-t1-tbody", "pkg-t1-empty");
   } catch (err) { console.error(err); }
 }
 

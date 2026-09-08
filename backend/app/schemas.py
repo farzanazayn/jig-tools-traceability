@@ -42,6 +42,8 @@ class LotOut(BaseModel):
     jig_tool_name: str
     item_type: str
     department: str
+    process: Optional[str] = None
+    machine: Optional[str] = None
     rack_location: str
     initial_qty: int
     current_qty: int
