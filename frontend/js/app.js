@@ -641,7 +641,22 @@ async function viewLotHistory(lotId, lotNumber) {
       <div class="lot-sum-box warn"><div class="lot-sum-val">${outNow}</div><div class="lot-sum-label">Out Now</div></div>
       <div class="lot-sum-box"><div class="lot-sum-val">${lot ? lot.rack_location : "—"}</div><div class="lot-sum-label">Rack Location</div></div>
     `;
-    document.getElementById("lh-detail-title").textContent = `${lotNumber} — Transaction Log`;
+    const displayName = lot ? lot.jig_tool_name : lotNumber;
+    document.getElementById("lh-detail-title").textContent = `${displayName} — Transaction Log`;
+
+    const img = document.getElementById("lh-detail-image");
+    const placeholder = document.getElementById("lh-detail-placeholder");
+    const url = lot ? imageUrl(lot.jig_tool_id, lot.has_image) : null;
+    if (url) {
+      img.src = url;
+      img.alt = displayName;
+      img.style.display = "block";
+      placeholder.style.display = "none";
+    } else {
+      img.style.display = "none";
+      placeholder.style.display = "flex";
+    }
+
     document.getElementById("lh-detail").style.display = "block";
     document.getElementById("btn-export-excel").style.display = "inline-flex";
 

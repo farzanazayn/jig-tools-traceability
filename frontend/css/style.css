@@ -623,6 +623,20 @@ tbody tr:hover { background: var(--pink-light); }
   margin-bottom: 16px;
 }
 
+.lh-detail-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.lh-detail-thumb {
+  width: 96px;
+  height: 96px;
+  font-size: 32px;
+  border-radius: 10px;
+  cursor: default;
+}
+
 .lot-sum-box {
   background: var(--pink-light);
   border-radius: 8px;
