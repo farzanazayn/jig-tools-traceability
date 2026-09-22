@@ -84,7 +84,6 @@ def create_request(payload: schemas.RequestCreate, db: Session = Depends(get_db)
         )
         db.add(record)
         db.commit()
-        db.refresh(record)
         return _request_to_out(record)
 
     except HTTPException:
@@ -130,7 +129,6 @@ def approve_request(borrow_id: int, payload: schemas.AdminAction, db: Session = 
         )
         db.add(history)
         db.commit()
-        db.refresh(record)
         return _request_to_out(record)
 
     except HTTPException:
@@ -156,7 +154,6 @@ def reject_request(borrow_id: int, payload: schemas.AdminAction, db: Session = D
 
         record.status = "rejected"
         db.commit()
-        db.refresh(record)
         return _request_to_out(record)
 
     except HTTPException:
@@ -205,7 +202,6 @@ def submit_return(borrow_id: int, payload: schemas.ReturnCreate, db: Session = D
         )
         db.add(history)
         db.commit()
-        db.refresh(return_record)
         return return_record
 
     except HTTPException:

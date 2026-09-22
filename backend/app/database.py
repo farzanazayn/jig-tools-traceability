@@ -20,7 +20,15 @@ if not DATABASE_URL:
 DB_SCHEMA = os.getenv("DB_SCHEMA", "jigtools")
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# expire_on_commit=False: by default SQLAlchemy invalidates every loaded object
+# after each commit, so simply reading a field afterward (e.g. building the
+# response) silently fires another round-trip SELECT to a remote DB server.
+# Every field this app reads back after a commit was already set in Python
+# before that commit (or is a server_default fetched via Postgres's RETURNING
+# at INSERT time, which populates it regardless of this setting) — so nothing
+# here relies on the implicit reload, and turning it off removes an extra
+# network round-trip from every write endpoint.
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
 
 # All models below live under this schema (e.g. jigtools.jig_tools),
 # fully separate from the dummy-unit app's tables in "public".

@@ -33,5 +33,4 @@ def create_technician(payload: schemas.TechnicianCreate, db: Session = Depends(g
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="WBI already exists")
-    db.refresh(tech)
     return tech

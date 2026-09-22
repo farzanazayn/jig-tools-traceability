@@ -93,8 +93,7 @@ def register_lot(payload: schemas.LotCreate, db: Session = Depends(get_db)):
             current_qty=payload.initial_qty,
         )
         db.add(lot)
-        db.commit()
-        db.refresh(lot)
+        db.flush()  # assigns lot.lot_id without a full commit round-trip yet
 
         history = models.JigLotHistory(
             lot_id=lot.lot_id,
@@ -107,6 +106,9 @@ def register_lot(payload: schemas.LotCreate, db: Session = Depends(get_db)):
         )
         db.add(history)
         db.commit()
+        # No refresh needed: every field _lot_to_out reads was already set in
+        # Python above, and lot.jig_tool resolves from the session's identity
+        # map (jig_tool was already loaded by db.get() earlier) — not a new query.
         return _lot_to_out(lot)
 
     except HTTPException:
@@ -158,7 +160,6 @@ def update_lot(lot_id: int, payload: schemas.LotUpdate, db: Session = Depends(ge
         )
         db.add(history)
         db.commit()
-        db.refresh(lot)
         return _lot_to_out(lot)
 
     except HTTPException:

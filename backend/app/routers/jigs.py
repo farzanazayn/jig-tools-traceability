@@ -92,7 +92,6 @@ async def create_jig(
         )
         db.add(item)
         db.commit()
-        db.refresh(item)
         return _to_out(item)
     except HTTPException:
         raise
