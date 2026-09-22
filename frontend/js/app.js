@@ -4,7 +4,6 @@
 
 let allRequests = [];
 let allLots = [];
-let currentReturnRecord = null;
 let currentApproveRecord = null;
 let currentUpdateLot = null;
 let currentLotHistory = null;
@@ -62,7 +61,10 @@ function activatePanel(panelKey) {
   document.getElementById(`panel-${panelKey}`).classList.add("active");
   if (panelKey === "update-packages") loadUpdatePackages();
   if (panelKey === "register") loadPackagesForRegister();
-  if (panelKey === "queued") renderQueuedList();
+  if (panelKey === "queued") {
+    setQueuedDeptSectionExpanded("t2");
+    renderQueuedList();
+  }
   if (panelKey === "request") openRequestPage();
   if (panelKey === "lot-history") {
     document.getElementById("lh-search").value = "";
@@ -123,17 +125,19 @@ function getDisplayStatus(r) {
   if (r.status === "pending") return "pending";
   if (r.status === "rejected") return "rejected";
   if (r.status === "returned") return "returned";
+  if (r.status === "return_pending") return "return_pending";
   if (r.status === "borrowed") return isOverdue(r.borrow_datetime) ? "overdue" : "active";
   return r.status;
 }
 
 function statusBadge(status) {
   const map = {
-    pending:  ["badge-pending",  "Pending"],
-    active:   ["badge-active",   "Active"],
-    overdue:  ["badge-overdue",  "Overdue"],
-    rejected: ["badge-rejected", "Rejected"],
-    returned: ["badge-returned", "Returned"],
+    pending:        ["badge-pending",  "Pending"],
+    active:         ["badge-active",   "Active"],
+    overdue:        ["badge-overdue",  "Overdue"],
+    rejected:       ["badge-rejected", "Rejected"],
+    returned:       ["badge-returned", "Returned"],
+    return_pending: ["badge-return-pending", "Return Pending"],
   };
   const [cls, label] = map[status] || ["badge-returned", status];
   return `<span class="badge ${cls}">${label}</span>`;
@@ -217,9 +221,17 @@ function renderBorrowedList() {
   tbody.querySelectorAll(".btn-return-row[data-id]").forEach(btn => {
     btn.addEventListener("click", () => {
       const r = allRequests.find(x => x.borrow_id === Number(btn.dataset.id));
-      if (r) openReturnPopup(r);
+      if (r) requestReturn(r);
     });
   });
+}
+
+async function requestReturn(record) {
+  if (!confirm(`Return ${record.jig_tool_name} (${record.requested_qty} unit(s))? This will be sent to admin for approval before it's added back to stock.`)) return;
+  try {
+    await apiPost(`/api/request/${record.borrow_id}/return`, {});
+    refreshAll();
+  } catch (err) { alert(`Could not submit return: ${err.message}`); }
 }
 
 document.getElementById("search-box").addEventListener("input", renderBorrowedList);
@@ -248,6 +260,16 @@ function renderQueuedSection(dept, tbodyId, emptyId, headerId) {
   for (const r of rows) {
     const status = getDisplayStatus(r);
     const showReview = isAdmin() && r.status === "pending";
+    const showReturnActions = isAdmin() && r.status === "return_pending";
+    let actionCell = "";
+    if (showReview) {
+      actionCell = `<button class="btn btn-sm" data-id="${r.borrow_id}">Review</button>`;
+    } else if (showReturnActions) {
+      actionCell = `
+        <button class="btn-edit-row" data-approve-return="${r.borrow_id}">Approve Return</button>
+        <button class="btn-delete-row" data-reject-return="${r.borrow_id}">Reject</button>
+      `;
+    }
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><span class="reqno">${r.request_number}</span></td>
@@ -258,7 +280,7 @@ function renderQueuedSection(dept, tbodyId, emptyId, headerId) {
       <td>${r.purpose}</td>
       <td>${formatDateTime(r.borrow_datetime)}</td>
       <td>${statusBadge(status)}</td>
-      <td>${showReview ? `<button class="btn btn-sm" data-id="${r.borrow_id}">Review</button>` : ""}</td>
+      <td>${actionCell}</td>
     `;
     tbody.appendChild(tr);
   }
@@ -266,7 +288,49 @@ function renderQueuedSection(dept, tbodyId, emptyId, headerId) {
   tbody.querySelectorAll("button[data-id]").forEach(btn => {
     btn.addEventListener("click", () => openApprovePopup(Number(btn.dataset.id)));
   });
+  tbody.querySelectorAll("button[data-approve-return]").forEach(btn => {
+    btn.addEventListener("click", () => approveReturn(Number(btn.dataset.approveReturn)));
+  });
+  tbody.querySelectorAll("button[data-reject-return]").forEach(btn => {
+    btn.addEventListener("click", () => rejectReturn(Number(btn.dataset.rejectReturn)));
+  });
 }
+
+async function approveReturn(borrowId) {
+  if (!isAdmin()) return;
+  try {
+    await apiPost(`/api/request/${borrowId}/approve-return`, { admin_username: adminSession.username });
+    refreshAll();
+  } catch (err) { alert(`Could not approve return: ${err.message}`); }
+}
+
+async function rejectReturn(borrowId) {
+  if (!isAdmin()) return;
+  if (!confirm("Reject this return? The item will go back to 'borrowed'.")) return;
+  try {
+    await apiPost(`/api/request/${borrowId}/reject-return`, { admin_username: adminSession.username });
+    refreshAll();
+  } catch (err) { alert(`Could not reject return: ${err.message}`); }
+}
+
+// ── Accordion: only one of Test 2 / Test 1 open at a time ──
+let expandedQueuedSection = "t2";
+
+function setQueuedDeptSectionExpanded(deptKey) {
+  expandedQueuedSection = deptKey;
+  for (const key of ["t2", "t1"]) {
+    const isOpen = key === deptKey;
+    document.getElementById(`q-${key}-section`).style.display = isOpen ? "" : "none";
+    document.getElementById(`q-${key}-caret`).classList.toggle("collapsed", !isOpen);
+  }
+}
+
+document.querySelectorAll(".dept-header-toggle[data-queued-dept-toggle]").forEach(header => {
+  header.addEventListener("click", () => {
+    const key = header.dataset.queuedDeptToggle;
+    setQueuedDeptSectionExpanded(expandedQueuedSection === key ? null : key);
+  });
+});
 
 // =====================================================
 // ADMIN LOGIN
@@ -316,10 +380,18 @@ function openRequestPage() {
   });
 }
 
+let currentPickerLots = [];
+
 function renderJigLotPicker(lots) {
-  const list = document.getElementById("req-lot-list");
+  currentPickerLots = lots;
+  document.getElementById("req-lot-search").value = "";
+  renderJigLotPickerFiltered(lots);
+}
+
+function renderJigLotPickerFiltered(lots) {
+  const list = document.getElementById("req-lot-rows");
   if (lots.length === 0) {
-    list.innerHTML = `<div class="jig-picker-empty">No jigs/tools available in this department.</div>`;
+    list.innerHTML = `<div class="jig-picker-empty">No jigs/tools found.</div>`;
     return;
   }
   list.innerHTML = lots.map(l => {
@@ -341,6 +413,14 @@ function renderJigLotPicker(lots) {
     row.addEventListener("click", () => selectJigLot(Number(row.dataset.lotId)));
   });
 }
+
+document.getElementById("req-lot-search").addEventListener("input", () => {
+  const q = document.getElementById("req-lot-search").value.trim().toLowerCase();
+  const filtered = q ? currentPickerLots.filter(l => l.jig_tool_name.toLowerCase().includes(q)) : currentPickerLots;
+  renderJigLotPickerFiltered(filtered);
+});
+
+document.getElementById("req-lot-search").addEventListener("click", (e) => e.stopPropagation());
 
 document.getElementById("req-lot-toggle").addEventListener("click", () => {
   const picker = document.getElementById("req-lot-picker");
@@ -437,7 +517,9 @@ function clearRequestForm() {
   toggle.querySelector(".jig-picker-toggle-thumb").outerHTML = `<span class="jig-picker-toggle-thumb jig-thumb-placeholder">&#128736;&#65039;</span>`;
   toggle.querySelector(".jig-picker-toggle-label").textContent = "-- Select department first --";
   document.getElementById("req-lot-picker").classList.remove("open");
-  document.getElementById("req-lot-list").innerHTML = "";
+  document.getElementById("req-lot-search").value = "";
+  currentPickerLots = [];
+  document.getElementById("req-lot-rows").innerHTML = "";
   document.getElementById("req-tech-id").value = "";
   document.getElementById("req-tech-name").value = "";
   document.getElementById("req-location").value = "";
@@ -448,47 +530,6 @@ function clearRequestForm() {
   document.getElementById("req-image-preview").style.display = "none";
   hideMsg(document.getElementById("request-msg"));
 }
-
-// =====================================================
-// RETURN POPUP
-// =====================================================
-function openReturnPopup(record) {
-  currentReturnRecord = record;
-  document.getElementById("return-title").textContent = `Return: ${record.jig_tool_name}`;
-  document.getElementById("return-subtitle").textContent = `${record.request_number} · ${record.handler_no}`;
-  document.getElementById("return-borrower-info").innerHTML =
-    `<strong>Borrowed by:</strong> ${record.technician_name} &nbsp;·&nbsp; <strong>Qty to return:</strong> ${record.requested_qty} unit(s)`;
-  document.getElementById("ret-tech-id").value = "";
-  document.getElementById("ret-tech-name").value = "";
-  hideMsg(document.getElementById("return-msg"));
-  openPopup("modal-return");
-}
-
-document.getElementById("ret-tech-id").addEventListener("blur", async () => {
-  const id = document.getElementById("ret-tech-id").value.trim().toLowerCase();
-  const nameEl = document.getElementById("ret-tech-name");
-  nameEl.value = "";
-  if (!id) return;
-  try {
-    const tech = await apiGet(`/api/technicians/${encodeURIComponent(id)}`);
-    nameEl.value = tech.technician_name;
-  } catch { nameEl.value = "WBI not found"; }
-});
-
-document.getElementById("btn-confirm-return").addEventListener("click", async () => {
-  const msg = document.getElementById("return-msg");
-  hideMsg(msg);
-  if (!currentReturnRecord) return;
-  const retTechId = document.getElementById("ret-tech-id").value.trim().toLowerCase();
-  if (!retTechId) { showMsg(msg, "Please enter the returning WBI.", "error"); return; }
-  try {
-    await apiPost(`/api/request/${currentReturnRecord.borrow_id}/return`, {
-      returning_technician_id: retTechId,
-    });
-    showMsg(msg, "Return recorded successfully.", "success");
-    setTimeout(() => { closePopup("modal-return"); refreshAll(); }, 1000);
-  } catch (err) { showMsg(msg, err.message, "error"); }
-});
 
 // =====================================================
 // APPROVE / REJECT
@@ -640,6 +681,7 @@ function renderStockHistorySection(rows, tbodyId, emptyId) {
       <td>${thumbHtml(lot)}</td>
       <td>${lot.jig_tool_name}</td>
       <td>${lot.rack_location}</td>
+      <td>${lot.initial_qty}</td>
       <td>${lot.current_qty}</td>
     `;
     tr.addEventListener("click", () => viewLotHistory(lot.lot_id, lot.lot_number));
@@ -656,6 +698,7 @@ async function viewLotHistory(lotId, lotNumber) {
       .filter(r => r.lot_id === lotId && (getDisplayStatus(r) === "active" || getDisplayStatus(r) === "overdue"))
       .reduce((s, r) => s + r.requested_qty, 0);
     document.getElementById("lh-summary-boxes").innerHTML = `
+      <div class="lot-sum-box"><div class="lot-sum-val">${lot ? lot.initial_qty : "—"}</div><div class="lot-sum-label">Total Qty</div></div>
       <div class="lot-sum-box"><div class="lot-sum-val">${lot ? lot.current_qty : "—"}</div><div class="lot-sum-label">Current Qty</div></div>
       <div class="lot-sum-box warn"><div class="lot-sum-val">${outNow}</div><div class="lot-sum-label">Out Now</div></div>
       <div class="lot-sum-box"><div class="lot-sum-val">${lot ? lot.rack_location : "—"}</div><div class="lot-sum-label">Rack Location</div></div>
@@ -727,16 +770,28 @@ document.getElementById("btn-export-excel").addEventListener("click", () => {
 // UPDATE JIG/TOOL LIST (ADMIN)
 // =====================================================
 document.getElementById("pkg-machine-filter").addEventListener("change", loadUpdatePackages);
+document.getElementById("pkg-search").addEventListener("input", () => renderUpdatePackages(allPkgLots));
+
+let allPkgLots = [];
 
 async function loadUpdatePackages() {
   try {
-    const data = await apiGet("/api/lots");
+    allPkgLots = await apiGet("/api/lots");
     populateMachineFilterOptions();
-    const machineFilter = document.getElementById("pkg-machine-filter").value;
-    const matches = (r) => !machineFilter || r.machine === machineFilter;
-    renderUpdateTable(data.filter(r => r.department === "Test 2" && matches(r)), "pkg-t2-tbody", "pkg-t2-empty");
-    renderUpdateTable(data.filter(r => r.department === "Test 1" && matches(r)), "pkg-t1-tbody", "pkg-t1-empty");
+    renderUpdatePackages(allPkgLots);
   } catch (err) { console.error(err); }
+}
+
+function renderUpdatePackages(data) {
+  const machineFilter = document.getElementById("pkg-machine-filter").value;
+  const search = document.getElementById("pkg-search").value.trim().toLowerCase();
+  const matches = (r) => {
+    if (machineFilter && r.machine !== machineFilter) return false;
+    if (search && !`${r.jig_tool_name} ${r.rack_location}`.toLowerCase().includes(search)) return false;
+    return true;
+  };
+  renderUpdateTable(data.filter(r => r.department === "Test 2" && matches(r)), "pkg-t2-tbody", "pkg-t2-empty");
+  renderUpdateTable(data.filter(r => r.department === "Test 1" && matches(r)), "pkg-t1-tbody", "pkg-t1-empty");
 }
 
 function renderUpdateTable(rows, tbodyId, emptyId) {
@@ -751,6 +806,7 @@ function renderUpdateTable(rows, tbodyId, emptyId) {
       <td>${thumbHtml(r)}</td>
       <td><span class="lot-tag" data-lot="${r.lot_number}" style="cursor:pointer;">${r.jig_tool_name}</span></td>
       <td>${r.rack_location}</td>
+      <td>${r.initial_qty}</td>
       <td>${r.current_qty}</td>
       <td>
         <button class="btn-edit-row" data-lotid="${r.lot_id}">Edit</button>
@@ -777,6 +833,14 @@ function openUpdateLot(lot) {
   currentUpdateLot = lot;
   document.getElementById("ul-title").textContent = "Update Details";
   document.getElementById("ul-subtitle").textContent = lot.jig_tool_name;
+  document.getElementById("ul-name").value = lot.jig_tool_name;
+  document.getElementById("ul-image").value = "";
+  document.getElementById("ul-image-preview").style.display = "none";
+  const url = imageUrl(lot.jig_tool_id, lot.has_image);
+  const curImg = document.getElementById("ul-image-current");
+  const curPlaceholder = document.getElementById("ul-image-placeholder");
+  if (url) { curImg.src = url; curImg.style.display = "block"; curPlaceholder.style.display = "none"; }
+  else { curImg.style.display = "none"; curPlaceholder.style.display = "flex"; }
   document.getElementById("ul-current-qty").value = lot.current_qty;
   document.getElementById("ul-new-qty").value = "";
   document.getElementById("ul-location").value = lot.rack_location;
@@ -784,17 +848,37 @@ function openUpdateLot(lot) {
   openPopup("modal-update-lot");
 }
 
+document.getElementById("ul-image").addEventListener("change", () => {
+  const file = document.getElementById("ul-image").files[0];
+  const preview = document.getElementById("ul-image-preview");
+  if (!file) { preview.style.display = "none"; return; }
+  const reader = new FileReader();
+  reader.onload = () => { preview.src = reader.result; preview.style.display = "block"; };
+  reader.readAsDataURL(file);
+});
+
 document.getElementById("btn-save-lot-update").addEventListener("click", async () => {
   if (!currentUpdateLot || !isAdmin()) return;
   const msg = document.getElementById("ul-msg");
   hideMsg(msg);
   const newQtyStr = document.getElementById("ul-new-qty").value;
   const newLocation = document.getElementById("ul-location").value.trim();
+  const newName = document.getElementById("ul-name").value.trim();
+  const newImage = document.getElementById("ul-image").files[0];
   const reason = document.getElementById("ul-reason").value;
   const payload = { reason, admin_username: adminSession.username };
   if (newQtyStr !== "") payload.new_qty = Number(newQtyStr);
   if (newLocation && newLocation !== currentUpdateLot.rack_location) payload.rack_location = newLocation;
   try {
+    // Name/picture belong to the jig/tool itself, not this specific lot — only
+    // sent if something actually changed, via a separate request.
+    if ((newName && newName !== currentUpdateLot.jig_tool_name) || newImage) {
+      const jigFormData = new FormData();
+      jigFormData.append("admin_username", adminSession.username);
+      if (newName && newName !== currentUpdateLot.jig_tool_name) jigFormData.append("jig_tool_name", newName);
+      if (newImage) jigFormData.append("image", newImage);
+      await apiPatchForm(`/api/jigs/${currentUpdateLot.jig_tool_id}`, jigFormData);
+    }
     await apiPatch(`/api/lots/${currentUpdateLot.lot_id}`, payload);
     showMsg(msg, "Updated.", "success");
     setTimeout(() => { closePopup("modal-update-lot"); loadUpdatePackages(); refreshAll(); }, 800);
@@ -871,10 +955,15 @@ document.getElementById("package-form").addEventListener("submit", async (e) => 
     if (file) formData.append("image", file);
 
     const result = await apiPostForm("/api/jigs", formData);
-    showMsg(msg, `Jig/Tool "${result.jig_tool_name}" added.`, "success");
+    const qty = Number(document.getElementById("pkg-qty").value);
+    showMsg(msg, qty > 0
+      ? `"${result.jig_tool_name}" added and registered with ${qty} unit(s) in stock.`
+      : `"${result.jig_tool_name}" added to the master list (no starting quantity — register stock for it below when ready).`,
+      "success");
     e.target.reset();
     document.getElementById("pkg-image-preview").style.display = "none";
     loadPackagesForRegister();
+    loadAllLots();
   } catch (err) { showMsg(msg, err.message, "error"); }
 });
 

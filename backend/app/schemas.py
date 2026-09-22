@@ -85,17 +85,6 @@ class RequestOut(BaseModel):
         from_attributes = True
 
 
-class ReturnCreate(BaseModel):
-    returning_technician_id: str
-
-class ReturnOut(BaseModel):
-    return_id: int
-    borrow_id: int
-    return_qty: int
-    returning_technician_id: str
-    return_datetime: datetime
-    class Config:
-        from_attributes = True
 
 
 class LotHistoryOut(BaseModel):

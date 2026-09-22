@@ -11,6 +11,7 @@ import traceback
 import openpyxl
 from .. import models, schemas
 from ..database import get_db
+from .jig_lots import _generate_lot_number
 
 router = APIRouter(prefix="/api/jigs", tags=["jigs"])
 
@@ -91,6 +92,37 @@ async def create_jig(
             image_mime=image_mime,
         )
         db.add(item)
+        db.flush()  # assigns item.jig_tool_id, without a full commit round-trip yet
+
+        # One registration step instead of two: if a starting quantity was given,
+        # immediately create the matching stock lot too (same info the form
+        # already asked for), so the item shows up on Stock History / Update
+        # Jig/Tool List right away instead of needing a separate "Register New
+        # Stock" submission first.
+        if default_qty > 0:
+            lot_location = default_location.strip()
+            lot = models.JigToolLot(
+                lot_number=_generate_lot_number(db, item.jig_tool_name),
+                jig_tool_id=item.jig_tool_id,
+                department=item.department,
+                rack_location=lot_location,
+                initial_qty=default_qty,
+                current_qty=default_qty,
+            )
+            db.add(lot)
+            db.flush()
+
+            history = models.JigLotHistory(
+                lot_id=lot.lot_id,
+                action_type="REGISTERED",
+                qty_before=0,
+                qty_after=default_qty,
+                qty_change=default_qty,
+                reason="Initial registration",
+                notes=f"Registered with {default_qty} unit(s) at {lot_location}",
+            )
+            db.add(history)
+
         db.commit()
         return _to_out(item)
     except HTTPException:
@@ -475,6 +507,44 @@ def get_jig_image(jig_tool_id: int, db: Session = Depends(get_db)):
     if not item or not item.image_data:
         raise HTTPException(status_code=404, detail="No image for this item")
     return Response(content=item.image_data, media_type=item.image_mime or "image/jpeg")
+
+
+@router.patch("/{jig_tool_id}", response_model=schemas.JigToolOut)
+async def update_jig(
+    jig_tool_id: int,
+    admin_username: str = Form(...),
+    jig_tool_name: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    try:
+        item = db.get(models.JigTool, jig_tool_id)
+        if not item:
+            raise HTTPException(status_code=404, detail="Jig/Tool not found")
+        admin = db.query(models.Admin).filter(models.Admin.username == admin_username).first()
+        if not admin:
+            raise HTTPException(status_code=401, detail="Invalid admin session.")
+
+        if jig_tool_name is not None and jig_tool_name.strip():
+            item.jig_tool_name = jig_tool_name.strip()
+
+        if image is not None and image.filename:
+            if image.content_type not in ALLOWED_IMAGE_TYPES:
+                raise HTTPException(status_code=400, detail="Image must be JPEG, PNG, WEBP or GIF.")
+            data = await image.read()
+            if len(data) > MAX_IMAGE_BYTES:
+                raise HTTPException(status_code=400, detail="Image must be smaller than 5 MB.")
+            item.image_data = data
+            item.image_mime = image.content_type
+
+        db.commit()
+        return _to_out(item)
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/{jig_tool_id}")

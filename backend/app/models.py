@@ -54,8 +54,11 @@ class JigToolLot(Base):
     created_at = Column(TIMESTAMP, server_default=func.now())
 
     jig_tool = relationship("JigTool", back_populates="lots")
-    borrow_records = relationship("BorrowRecord", back_populates="lot")
-    history = relationship("JigLotHistory", back_populates="lot")
+    # cascade="all, delete-orphan": deleting a lot deletes its borrow/return/
+    # history records too, instead of SQLAlchemy trying to null out their
+    # (non-nullable) lot_id / borrow_id foreign keys and failing.
+    borrow_records = relationship("BorrowRecord", back_populates="lot", cascade="all, delete-orphan")
+    history = relationship("JigLotHistory", back_populates="lot", cascade="all, delete-orphan")
 
 
 class BorrowRecord(Base):
@@ -73,7 +76,9 @@ class BorrowRecord(Base):
 
     lot = relationship("JigToolLot", back_populates="borrow_records")
     technician = relationship("Technician")
-    return_record = relationship("ReturnRecord", back_populates="borrow", uselist=False)
+    return_record = relationship(
+        "ReturnRecord", back_populates="borrow", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class ReturnRecord(Base):

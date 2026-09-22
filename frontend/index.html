@@ -115,7 +115,12 @@
               <span class="jig-picker-toggle-label">-- Select department first --</span>
               <span class="jig-picker-caret">&#9662;</span>
             </button>
-            <div class="jig-picker-list" id="req-lot-list"></div>
+            <div class="jig-picker-list" id="req-lot-list">
+              <div class="jig-picker-search-wrap">
+                <input type="text" id="req-lot-search" class="jig-picker-search" placeholder="Search jig / tool..." />
+              </div>
+              <div id="req-lot-rows"></div>
+            </div>
           </div>
           <img class="jig-preview jig-preview-lg" id="req-image-preview" alt="Preview" />
           <div class="form-row">
@@ -143,8 +148,11 @@
       </div>
 
       <div class="dept-section">
-        <div class="dept-header">Test 2</div>
-        <div class="card" style="border-radius:0 0 8px 8px; margin-bottom:0;">
+        <div class="dept-header dept-header-toggle" data-queued-dept-toggle="t2">
+          <span>Test 2</span>
+          <span class="dept-toggle-caret" id="q-t2-caret">&#9662;</span>
+        </div>
+        <div class="card" id="q-t2-section" style="border-radius:0 0 8px 8px; margin-bottom:0;">
           <div class="table-wrap">
             <table>
               <thead>
@@ -162,8 +170,11 @@
       </div>
 
       <div class="dept-section" style="margin-top:24px;">
-        <div class="dept-header">Test 1</div>
-        <div class="card" style="border-radius:0 0 8px 8px; margin-bottom:0;">
+        <div class="dept-header dept-header-toggle" data-queued-dept-toggle="t1">
+          <span>Test 1</span>
+          <span class="dept-toggle-caret" id="q-t1-caret">&#9662;</span>
+        </div>
+        <div class="card" id="q-t1-section" style="border-radius:0 0 8px 8px; margin-bottom:0;">
           <div class="table-wrap">
             <table>
               <thead>
@@ -205,7 +216,7 @@
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th></tr>
+                  <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Total Qty</th><th>Current Qty</th></tr>
                 </thead>
                 <tbody id="lh-t2-tbody"></tbody>
               </table>
@@ -223,7 +234,7 @@
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th></tr>
+                  <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Total Qty</th><th>Current Qty</th></tr>
                 </thead>
                 <tbody id="lh-t1-tbody"></tbody>
               </table>
@@ -308,6 +319,7 @@
       <div class="section-title" style="margin-bottom:16px;">Update Jig / Tool List</div>
 
       <div class="search-row">
+        <input type="text" id="pkg-search" placeholder="Search by jig/tool name or rack location..." />
         <select id="pkg-machine-filter">
           <option value="">All Machines</option>
         </select>
@@ -319,7 +331,7 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th><th>Action</th></tr>
+                <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Total Qty</th><th>Current Qty</th><th>Action</th></tr>
               </thead>
               <tbody id="pkg-t2-tbody"></tbody>
             </table>
@@ -334,7 +346,7 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Current Qty</th><th>Action</th></tr>
+                <tr><th></th><th>Jig / Tool</th><th>Rack</th><th>Total Qty</th><th>Current Qty</th><th>Action</th></tr>
               </thead>
               <tbody id="pkg-t1-tbody"></tbody>
             </table>
@@ -375,8 +387,13 @@
       </div>
 
       <div class="card">
-        <div class="card-title">Add Jig / Tool (Master List)</div>
+        <div class="card-title">Add Jig / Tool</div>
         <div class="card-body">
+          <p class="hint" style="margin-bottom:10px;">
+            One step — fill in a Default Qty above 0 and it's immediately registered as
+            stock at that location too (shows up on Stock History right away). Leave Qty
+            at 0 to add it to the catalog only, without any stock yet.
+          </p>
           <form id="package-form">
             <div class="form-row">
               <div>
@@ -439,8 +456,13 @@
       </div>
 
       <div class="card">
-        <div class="card-title">Register New Stock</div>
+        <div class="card-title">Add More Stock (Existing Item)</div>
         <div class="card-body">
+          <p class="hint" style="margin-bottom:10px;">
+            Optional — only needed if an item already in the catalog needs an
+            <em>additional</em> batch at a different location. New items don't need
+            this: "Add Jig / Tool" above already registers their starting stock.
+          </p>
           <form id="lot-form">
             <label>Jig / Tool <span class="req">*</span></label>
             <select id="lot-package" required></select>
@@ -520,33 +542,6 @@
   </div>
 </div>
 
-<!-- ============ POPUP: RETURN ============ -->
-<div class="modal-backdrop" id="modal-return">
-  <div class="modal" style="max-width:500px;">
-    <div class="modal-header pink"><h3 id="return-title">Return Jig / Tool</h3><p id="return-subtitle"></p></div>
-    <div class="modal-body">
-      <div style="background:var(--pink-light); border-radius:6px; padding:9px 11px; font-size:12.5px; margin-bottom:12px;" id="return-borrower-info"></div>
-      <div class="form-row">
-        <div>
-          <label>Returning WBI <span class="req">*</span></label>
-          <input type="text" id="ret-tech-id" placeholder="Enter WBI of person returning" />
-        </div>
-        <div>
-          <label>Returning Tech Name</label>
-          <input type="text" id="ret-tech-name" readonly placeholder="Auto-filled" />
-        </div>
-      </div>
-      <label>Return Date &amp; Time</label>
-      <input type="text" value="Auto assigned on submit" readonly />
-      <div class="msg" id="return-msg"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closePopup('modal-return')">Cancel</button>
-      <button class="btn" style="background:var(--accent)" id="btn-confirm-return">Confirm Return</button>
-    </div>
-  </div>
-</div>
-
 <!-- ============ POPUP: APPROVE / REJECT ============ -->
 <div class="modal-backdrop" id="modal-approve">
   <div class="modal">
@@ -577,6 +572,15 @@
   <div class="modal">
     <div class="modal-header" style="background:#1a56db;"><h3 id="ul-title">Update Details</h3><p id="ul-subtitle"></p></div>
     <div class="modal-body">
+      <label>Jig / Tool Name</label>
+      <input type="text" id="ul-name" placeholder="Rename this item" />
+      <label>Picture</label>
+      <div class="lh-detail-header" style="justify-content:flex-start; gap:10px;">
+        <img class="jig-thumb lh-detail-thumb" id="ul-image-current" alt="" style="display:none;" />
+        <div class="jig-thumb-placeholder lh-detail-thumb" id="ul-image-placeholder">&#128736;&#65039;</div>
+      </div>
+      <input type="file" id="ul-image" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:8px;" />
+      <img class="jig-preview" id="ul-image-preview" alt="Preview" />
       <label>Current Qty</label>
       <input type="text" id="ul-current-qty" readonly />
       <label>New Qty (leave blank to keep current)</label>

@@ -34,6 +34,15 @@ async function apiPostForm(path, formData) {
   return res.json();
 }
 
+async function apiPatchForm(path, formData) {
+  const res = await fetch(`${API}${path}`, {
+    method: "PATCH",
+    body: formData,
+  });
+  if (!res.ok) throw new Error(await errorDetail(res));
+  return res.json();
+}
+
 async function apiPatch(path, body) {
   const res = await fetch(`${API}${path}`, {
     method: "PATCH",

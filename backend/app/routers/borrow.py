@@ -164,8 +164,12 @@ def reject_request(borrow_id: int, payload: schemas.AdminAction, db: Session = D
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{borrow_id}/return", response_model=schemas.ReturnOut)
-def submit_return(borrow_id: int, payload: schemas.ReturnCreate, db: Session = Depends(get_db)):
+@router.post("/{borrow_id}/return", response_model=schemas.RequestOut)
+def submit_return(borrow_id: int, db: Session = Depends(get_db)):
+    """One-click return request — no fields to fill in. This only flags the
+    item as awaiting a return approval; stock isn't touched and the return
+    isn't finalized until an admin approves it (mirrors the borrow-request
+    approval flow)."""
     try:
         record = db.get(models.BorrowRecord, borrow_id)
         if not record:
@@ -173,9 +177,30 @@ def submit_return(borrow_id: int, payload: schemas.ReturnCreate, db: Session = D
         if record.status != "borrowed":
             raise HTTPException(status_code=400, detail=f"Cannot return — status is '{record.status}'.")
 
-        returning_tech = db.get(models.Technician, payload.returning_technician_id)
-        if not returning_tech:
-            raise HTTPException(status_code=404, detail="Returning WBI not found.")
+        record.status = "return_pending"
+        db.commit()
+        return _request_to_out(record)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{borrow_id}/approve-return", response_model=schemas.RequestOut)
+def approve_return(borrow_id: int, payload: schemas.AdminAction, db: Session = Depends(get_db)):
+    try:
+        record = db.get(models.BorrowRecord, borrow_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Request record not found")
+        if record.status != "return_pending":
+            raise HTTPException(status_code=400, detail=f"This return is not pending approval (status: '{record.status}').")
+
+        admin = db.query(models.Admin).filter(models.Admin.username == payload.admin_username).first()
+        if not admin:
+            raise HTTPException(status_code=401, detail="Invalid admin session.")
 
         lot = record.lot
         qty_before = lot.current_qty
@@ -184,7 +209,7 @@ def submit_return(borrow_id: int, payload: schemas.ReturnCreate, db: Session = D
         return_record = models.ReturnRecord(
             borrow_id=record.borrow_id,
             return_qty=record.requested_qty,
-            returning_technician_id=payload.returning_technician_id,
+            returning_technician_id=record.technician_id,
         )
         db.add(return_record)
         record.status = "returned"
@@ -195,14 +220,41 @@ def submit_return(borrow_id: int, payload: schemas.ReturnCreate, db: Session = D
             qty_change=record.requested_qty,
             qty_before=qty_before,
             qty_after=lot.current_qty,
-            reason=f"Return for {record.request_number}",
-            technician_id=payload.returning_technician_id,
+            reason=f"Return approved for {record.request_number}",
+            technician_id=record.technician_id,
+            admin_username=payload.admin_username,
             borrow_id=record.borrow_id,
             notes=f"Returned {record.requested_qty} unit(s)",
         )
         db.add(history)
         db.commit()
-        return return_record
+        return _request_to_out(record)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{borrow_id}/reject-return", response_model=schemas.RequestOut)
+def reject_return(borrow_id: int, payload: schemas.AdminAction, db: Session = Depends(get_db)):
+    """Puts it back to 'borrowed' — e.g. the item wasn't actually returned."""
+    try:
+        record = db.get(models.BorrowRecord, borrow_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Request record not found")
+        if record.status != "return_pending":
+            raise HTTPException(status_code=400, detail=f"This return is not pending approval (status: '{record.status}').")
+
+        admin = db.query(models.Admin).filter(models.Admin.username == payload.admin_username).first()
+        if not admin:
+            raise HTTPException(status_code=401, detail="Invalid admin session.")
+
+        record.status = "borrowed"
+        db.commit()
+        return _request_to_out(record)
 
     except HTTPException:
         raise

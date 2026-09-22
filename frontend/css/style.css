@@ -526,6 +526,8 @@ tbody tr:hover { background: var(--pink-light); }
 .badge-rejected::before { background: var(--rejected); }
 .badge-returned { background: #f0f0f0; color: var(--muted); }
 .badge-returned::before { background: #999; }
+.badge-return-pending { background: #ede9fe; color: #6d28d9; }
+.badge-return-pending::before { background: #6d28d9; }
 
 /* ── Action type badges ── */
 .action-out { background: #fff3e0; color: #e65100; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
@@ -782,6 +784,23 @@ tbody tr:hover { background: var(--pink-light); }
 
 .jig-picker.open .jig-picker-list {
   display: block;
+}
+
+.jig-picker-search-wrap {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  padding: 8px;
+  border-bottom: 1px solid var(--pink-border);
+  z-index: 1;
+}
+
+.jig-picker-search {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--pink-border);
+  border-radius: var(--radius);
+  font-size: 13px;
 }
 
 .jig-picker-row {
