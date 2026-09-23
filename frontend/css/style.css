@@ -427,6 +427,8 @@ input[readonly], input:disabled {
 
 .search-row input {
   flex: 1;
+  width: auto;
+  min-width: 0;
   padding: 9px 13px;
   border: 1px solid var(--pink-border);
   border-radius: var(--radius);
@@ -436,6 +438,8 @@ input[readonly], input:disabled {
 }
 
 .search-row select {
+  width: auto;
+  flex-shrink: 0;
   padding: 9px 13px;
   border: 1px solid var(--pink-border);
   border-radius: var(--radius);
