@@ -247,6 +247,8 @@ function renderQueuedList() {
   renderQueuedSection("Test 1", "queued-t1-tbody", "queued-t1-empty", "q1-action-col");
 }
 
+document.getElementById("queued-search").addEventListener("input", renderQueuedList);
+
 function renderQueuedSection(dept, tbodyId, emptyId, headerId) {
   const tbody = document.getElementById(tbodyId);
   const empty = document.getElementById(emptyId);
@@ -254,7 +256,11 @@ function renderQueuedSection(dept, tbodyId, emptyId, headerId) {
   if (!tbody) return;
   if (header) header.textContent = isAdmin() ? "Action" : "";
 
-  const rows = allRequests.filter(r => r.department === dept);
+  const search = document.getElementById("queued-search").value.trim().toLowerCase();
+  let rows = allRequests.filter(r => r.department === dept);
+  if (search) {
+    rows = rows.filter(r => `${r.request_number} ${r.jig_tool_name} ${r.handler_no} ${r.technician_name}`.toLowerCase().includes(search));
+  }
   tbody.innerHTML = "";
   if (rows.length === 0) { empty.style.display = "block"; return; }
   empty.style.display = "none";
