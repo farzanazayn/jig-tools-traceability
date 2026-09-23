@@ -396,9 +396,9 @@
         <div class="card-title">Add Jig / Tool</div>
         <div class="card-body">
           <p class="hint" style="margin-bottom:10px;">
-            One step — fill in a Default Qty above 0 and it's immediately registered as
-            stock at that location too (shows up on Stock History right away). Leave Qty
-            at 0 to add it to the catalog only, without any stock yet.
+            One step — creates the item and registers it as stock at that location
+            right away (shows up on Stock History immediately). Need to adjust the
+            qty or location later? Use Edit on Update Jig/Tool List.
           </p>
           <form id="package-form">
             <div class="form-row">
@@ -451,39 +451,12 @@
               </div>
             </div>
             <label>Default Qty <span class="req">*</span></label>
-            <input type="number" id="pkg-qty" min="0" required />
+            <input type="number" id="pkg-qty" min="1" required />
             <label>Picture</label>
             <input type="file" id="pkg-image" accept="image/png,image/jpeg,image/webp,image/gif" />
             <img class="jig-preview" id="pkg-image-preview" alt="Preview" />
             <button type="submit" class="btn">Add Jig / Tool</button>
             <div class="msg" id="package-msg"></div>
-          </form>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Add More Stock (Existing Item)</div>
-        <div class="card-body">
-          <p class="hint" style="margin-bottom:10px;">
-            Optional — only needed if an item already in the catalog needs an
-            <em>additional</em> batch at a different location. New items don't need
-            this: "Add Jig / Tool" above already registers their starting stock.
-          </p>
-          <form id="lot-form">
-            <label>Jig / Tool <span class="req">*</span></label>
-            <select id="lot-package" required></select>
-            <div class="form-row">
-              <div>
-                <label>Rack Location <span class="req">*</span></label>
-                <input type="text" id="lot-location" required />
-              </div>
-              <div>
-                <label>Qty (Good Units) <span class="req">*</span></label>
-                <input type="number" id="lot-qty" min="1" required />
-              </div>
-            </div>
-            <button type="submit" class="btn">Register</button>
-            <div class="msg" id="lot-msg"></div>
           </form>
         </div>
       </div>

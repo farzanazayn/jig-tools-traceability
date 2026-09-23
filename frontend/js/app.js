@@ -63,7 +63,6 @@ function activatePanel(panelKey) {
     setPkgDeptSectionExpanded("t2");
     loadUpdatePackages();
   }
-  if (panelKey === "register") loadPackagesForRegister();
   if (panelKey === "queued") {
     setQueuedDeptSectionExpanded("t2");
     renderQueuedList();
@@ -920,22 +919,6 @@ async function deleteLot(lotId, name) {
 // =====================================================
 // REGISTER PANEL
 // =====================================================
-let packagesCache = [];
-
-async function loadPackagesForRegister() {
-  try {
-    packagesCache = await apiGet("/api/jigs");
-    const sel = document.getElementById("lot-package");
-    sel.innerHTML = '<option value="">-- Select jig / tool --</option>' +
-      packagesCache.map(p => `<option value="${p.jig_tool_id}">${p.jig_tool_name} (${p.item_type} · ${p.department})</option>`).join("");
-  } catch (err) { console.error(err); }
-}
-
-document.getElementById("lot-package").addEventListener("change", () => {
-  const pkg = packagesCache.find(p => p.jig_tool_id === Number(document.getElementById("lot-package").value));
-  document.getElementById("lot-location").value = pkg ? pkg.default_location : "";
-  document.getElementById("lot-qty").value = pkg ? pkg.default_qty : "";
-});
 
 document.getElementById("tech-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -978,32 +961,10 @@ document.getElementById("package-form").addEventListener("submit", async (e) => 
 
     const result = await apiPostForm("/api/jigs", formData);
     const qty = Number(document.getElementById("pkg-qty").value);
-    showMsg(msg, qty > 0
-      ? `"${result.jig_tool_name}" added and registered with ${qty} unit(s) in stock.`
-      : `"${result.jig_tool_name}" added to the master list (no starting quantity — register stock for it below when ready).`,
-      "success");
+    showMsg(msg, `"${result.jig_tool_name}" added and registered with ${qty} unit(s) in stock.`, "success");
     e.target.reset();
     document.getElementById("pkg-image-preview").style.display = "none";
-    loadPackagesForRegister();
     loadAllLots();
-  } catch (err) { showMsg(msg, err.message, "error"); }
-});
-
-document.getElementById("lot-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const msg = document.getElementById("lot-msg");
-  const payload = {
-    jig_tool_id: Number(document.getElementById("lot-package").value),
-    rack_location: document.getElementById("lot-location").value.trim(),
-    initial_qty: Number(document.getElementById("lot-qty").value),
-  };
-  if (!payload.jig_tool_id) { showMsg(msg, "Please select a jig / tool.", "error"); return; }
-  try {
-    const lot = await apiPost("/api/lots", payload);
-    showMsg(msg, `${lot.jig_tool_name} added to stock.`, "success");
-    e.target.reset();
-    loadAllLots();
-    loadPackagesForRegister();
   } catch (err) { showMsg(msg, err.message, "error"); }
 });
 
@@ -1050,7 +1011,6 @@ document.getElementById("bulk-form").addEventListener("submit", async (e) => {
     document.getElementById("bulk-results").style.display = "block";
 
     loadAllLots();
-    loadPackagesForRegister();
     loadUpdatePackages();
   } catch (err) {
     showMsg(msg, err.message, "error");
