@@ -585,6 +585,23 @@
   </div>
 </div>
 
+<!-- ============ POPUP: RETURN ============ -->
+<div class="modal-backdrop" id="modal-return">
+  <div class="modal">
+    <div class="modal-header" style="background:#2e7d7a;"><h3>Confirm Return</h3><p id="ret-subtitle"></p></div>
+    <div class="modal-body">
+      <label>Technician WBI — who is returning it <span class="req">*</span></label>
+      <input type="text" id="ret-tech-id" placeholder="Enter WBI" />
+      <input type="text" id="ret-tech-name" readonly placeholder="Auto-filled from WBI" />
+      <div class="msg" id="ret-msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePopup('modal-return')">Cancel</button>
+      <button class="btn" id="btn-confirm-return">Confirm Return</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ IMAGE LIGHTBOX ============ -->
 <div class="lightbox-backdrop" id="lightbox">
   <img id="lightbox-img" src="" alt="Jig/Tool" />

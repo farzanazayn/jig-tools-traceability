@@ -73,9 +73,14 @@ class BorrowRecord(Base):
     handler_no = Column(String(50), nullable=False)
     borrow_datetime = Column(TIMESTAMP, server_default=func.now())
     status = Column(String(20), nullable=False, default="pending")
+    # Who physically brought the item back — captured when the return is
+    # submitted, before an admin approves it (distinct from technician_id,
+    # who originally borrowed it).
+    return_technician_id = Column(String(20), ForeignKey("jigtools.technicians.technician_id"), nullable=True)
 
     lot = relationship("JigToolLot", back_populates="borrow_records")
-    technician = relationship("Technician")
+    technician = relationship("Technician", foreign_keys=[technician_id])
+    return_technician = relationship("Technician", foreign_keys=[return_technician_id])
     return_record = relationship(
         "ReturnRecord", back_populates="borrow", uselist=False, cascade="all, delete-orphan"
     )

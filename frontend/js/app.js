@@ -228,13 +228,43 @@ function renderBorrowedList() {
   });
 }
 
-async function requestReturn(record) {
-  if (!confirm(`Return ${record.jig_tool_name} (${record.requested_qty} unit(s))? This will be sent to admin for approval before it's added back to stock.`)) return;
-  try {
-    await apiPost(`/api/request/${record.borrow_id}/return`, {});
-    refreshAll();
-  } catch (err) { alert(`Could not submit return: ${err.message}`); }
+let currentReturnRecord = null;
+
+function requestReturn(record) {
+  currentReturnRecord = record;
+  document.getElementById("ret-subtitle").textContent =
+    `${record.jig_tool_name} — ${record.requested_qty} unit(s)`;
+  document.getElementById("ret-tech-id").value = "";
+  document.getElementById("ret-tech-name").value = "";
+  hideMsg(document.getElementById("ret-msg"));
+  openPopup("modal-return");
 }
+
+document.getElementById("ret-tech-id").addEventListener("blur", async () => {
+  const id = document.getElementById("ret-tech-id").value.trim().toLowerCase();
+  const nameEl = document.getElementById("ret-tech-name");
+  nameEl.value = "";
+  if (!id) return;
+  try {
+    const tech = await apiGet(`/api/technicians/${encodeURIComponent(id)}`);
+    nameEl.value = tech.technician_name;
+  } catch {
+    nameEl.value = "WBI not found — contact admin";
+  }
+});
+
+document.getElementById("btn-confirm-return").addEventListener("click", async () => {
+  if (!currentReturnRecord) return;
+  const msg = document.getElementById("ret-msg");
+  hideMsg(msg);
+  const techId = document.getElementById("ret-tech-id").value.trim().toLowerCase();
+  if (!techId) { showMsg(msg, "Please enter the technician WBI.", "error"); return; }
+  try {
+    await apiPost(`/api/request/${currentReturnRecord.borrow_id}/return`, { technician_id: techId });
+    closePopup("modal-return");
+    refreshAll();
+  } catch (err) { showMsg(msg, err.message, "error"); }
+});
 
 document.getElementById("search-box").addEventListener("input", renderBorrowedList);
 document.getElementById("dept-filter").addEventListener("change", renderBorrowedList);

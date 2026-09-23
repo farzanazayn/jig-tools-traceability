@@ -27,6 +27,8 @@ def _request_to_out(b: models.BorrowRecord) -> schemas.RequestOut:
         handler_no=b.handler_no,
         borrow_datetime=b.borrow_datetime,
         status=b.status,
+        return_technician_id=b.return_technician_id,
+        return_technician_name=b.return_technician.technician_name if b.return_technician else None,
     )
 
 
@@ -40,6 +42,7 @@ def list_requests(status: Optional[str] = Query(None), db: Session = Depends(get
             models.JigTool.jig_tool_name, models.JigTool.item_type
         ),
         joinedload(models.BorrowRecord.technician),
+        joinedload(models.BorrowRecord.return_technician),
     )
     if status:
         q = q.filter(models.BorrowRecord.status == status)
@@ -165,11 +168,10 @@ def reject_request(borrow_id: int, payload: schemas.AdminAction, db: Session = D
 
 
 @router.post("/{borrow_id}/return", response_model=schemas.RequestOut)
-def submit_return(borrow_id: int, db: Session = Depends(get_db)):
-    """One-click return request — no fields to fill in. This only flags the
-    item as awaiting a return approval; stock isn't touched and the return
-    isn't finalized until an admin approves it (mirrors the borrow-request
-    approval flow)."""
+def submit_return(borrow_id: int, payload: schemas.ReturnSubmit, db: Session = Depends(get_db)):
+    """Flags the item as awaiting a return approval, recording who physically
+    brought it back. Stock isn't touched and the return isn't finalized until
+    an admin approves it (mirrors the borrow-request approval flow)."""
     try:
         record = db.get(models.BorrowRecord, borrow_id)
         if not record:
@@ -177,6 +179,12 @@ def submit_return(borrow_id: int, db: Session = Depends(get_db)):
         if record.status != "borrowed":
             raise HTTPException(status_code=400, detail=f"Cannot return — status is '{record.status}'.")
 
+        technician_id = payload.technician_id.strip().lower()
+        technician = db.get(models.Technician, technician_id)
+        if not technician:
+            raise HTTPException(status_code=404, detail="WBI not found. Please check your WBI or contact admin.")
+
+        record.return_technician_id = technician_id
         record.status = "return_pending"
         db.commit()
         return _request_to_out(record)
@@ -209,7 +217,7 @@ def approve_return(borrow_id: int, payload: schemas.AdminAction, db: Session = D
         return_record = models.ReturnRecord(
             borrow_id=record.borrow_id,
             return_qty=record.requested_qty,
-            returning_technician_id=record.technician_id,
+            returning_technician_id=record.return_technician_id or record.technician_id,
         )
         db.add(return_record)
         record.status = "returned"
@@ -221,7 +229,7 @@ def approve_return(borrow_id: int, payload: schemas.AdminAction, db: Session = D
             qty_before=qty_before,
             qty_after=lot.current_qty,
             reason=f"Return approved for {record.request_number}",
-            technician_id=record.technician_id,
+            technician_id=record.return_technician_id or record.technician_id,
             admin_username=payload.admin_username,
             borrow_id=record.borrow_id,
             notes=f"Returned {record.requested_qty} unit(s)",

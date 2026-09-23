@@ -81,10 +81,14 @@ class RequestOut(BaseModel):
     handler_no: str
     borrow_datetime: datetime
     status: str
+    return_technician_id: Optional[str] = None
+    return_technician_name: Optional[str] = None
     class Config:
         from_attributes = True
 
 
+class ReturnSubmit(BaseModel):
+    technician_id: str
 
 
 class LotHistoryOut(BaseModel):
