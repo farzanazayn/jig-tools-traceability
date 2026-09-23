@@ -59,7 +59,10 @@ function activatePanel(panelKey) {
   const item = document.querySelector(`.sidebar-item[data-panel="${panelKey}"]`);
   if (item) item.classList.add("active");
   document.getElementById(`panel-${panelKey}`).classList.add("active");
-  if (panelKey === "update-packages") loadUpdatePackages();
+  if (panelKey === "update-packages") {
+    setPkgDeptSectionExpanded("t2");
+    loadUpdatePackages();
+  }
   if (panelKey === "register") loadPackagesForRegister();
   if (panelKey === "queued") {
     setQueuedDeptSectionExpanded("t2");
@@ -793,6 +796,25 @@ function renderUpdatePackages(data) {
   renderUpdateTable(data.filter(r => r.department === "Test 2" && matches(r)), "pkg-t2-tbody", "pkg-t2-empty");
   renderUpdateTable(data.filter(r => r.department === "Test 1" && matches(r)), "pkg-t1-tbody", "pkg-t1-empty");
 }
+
+// ── Accordion: only one of Test 2 / Test 1 open at a time ──
+let expandedPkgSection = "t2";
+
+function setPkgDeptSectionExpanded(deptKey) {
+  expandedPkgSection = deptKey;
+  for (const key of ["t2", "t1"]) {
+    const isOpen = key === deptKey;
+    document.getElementById(`pkg-${key}-section`).style.display = isOpen ? "" : "none";
+    document.getElementById(`pkg-${key}-caret`).classList.toggle("collapsed", !isOpen);
+  }
+}
+
+document.querySelectorAll(".dept-header-toggle[data-pkg-dept-toggle]").forEach(header => {
+  header.addEventListener("click", () => {
+    const key = header.dataset.pkgDeptToggle;
+    setPkgDeptSectionExpanded(expandedPkgSection === key ? null : key);
+  });
+});
 
 function renderUpdateTable(rows, tbodyId, emptyId) {
   const tbody = document.getElementById(tbodyId);

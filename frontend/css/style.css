@@ -632,9 +632,9 @@ tbody tr:hover { background: var(--pink-light); }
 }
 
 .lh-detail-thumb {
-  width: 96px;
-  height: 96px;
-  font-size: 32px;
+  width: 220px;
+  height: 220px;
+  font-size: 64px;
   border-radius: 10px;
   cursor: default;
 }
